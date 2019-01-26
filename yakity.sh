@@ -581,6 +581,11 @@ retry_until_0() {
   { is_debug && echo "${msg}: success"; } || echo "✓"
 }
 
+# Returns 0 if $1>$2
+version_gt() {
+  test "$(printf '%s\n' "${@}" | sort -V | head -n 1)" != "${1}"
+}
+
 # Reverses an FQDN and substitutes slash characters for periods.
 # For example, k8s.vmware.ci becomes ci/vmware/k8s.
 reverse_fqdn() {
@@ -1789,7 +1794,25 @@ install_cloud_provider() {
   fi
 }
 
+################################################################################
+##                             K8S API Server                                 ##
+################################################################################
+
 install_kube_apiserver() {
+  # If deploying to 1.14 release or newer then the default admission plug-ins
+  # are different.
+  k8s_client_ver=$("${BIN_DIR}"/kubectl version \
+    --client --short | cut -c17-) || \
+    { error "failed to get kubectl client version"; return; }
+  info "kubernetes client version: ${k8s_client_ver}"
+
+  if [ "${k8s_client_ver}" = "v1.14.0-alpha.1" ] || \
+     version_gt "${k8s_client_ver}" "v1.14.0-alpha.1"; then
+    APISERVER_OPTS_ENABLE_ADMISSION_PLUGINS="${APISERVER_OPTS_ENABLE_ADMISSION_PLUGINS:-NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota}"
+  else
+    APISERVER_OPTS_ENABLE_ADMISSION_PLUGINS="${APISERVER_OPTS_ENABLE_ADMISSION_PLUGINS:-Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota}"
+  fi
+
   echo "installing kube-apiserver"
 
   cat <<EOF > /etc/default/kube-apiserver
@@ -1805,7 +1828,7 @@ APISERVER_OPTS="--advertise-address=${IPV4_ADDRESS} \\
 --authorization-mode=Node,RBAC \\
 --bind-address=0.0.0.0${CLOUD_PROVIDER_OPTS} \\
 --client-ca-file='${TLS_CA_CRT}' \\
---enable-admission-plugins='Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota' \\
+--enable-admission-plugins='${APISERVER_OPTS_ENABLE_ADMISSION_PLUGINS}' \\
 --enable-swagger-ui=true \\
 --etcd-cafile='${TLS_CA_CRT}' \\
 --etcd-certfile=/etc/ssl/etcd.crt \
