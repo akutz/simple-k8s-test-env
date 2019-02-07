@@ -1,4 +1,4 @@
-package config // import "github.com/vmware/sk8/pkg/config"
+package config // import "vmw.io/sk8/config"
 
 // Config is a struct that represents the JSON config data for a sk8 client.
 type Config struct {

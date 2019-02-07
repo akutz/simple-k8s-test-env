@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/vmware/sk8/pkg/app"
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/app"
+	"vmw.io/sk8/config"
 )
 
 func TestGetCloudInitUserData(t *testing.T) {

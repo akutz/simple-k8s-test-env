@@ -1,4 +1,4 @@
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 // ValidateConfig validates the provided config and updates missing

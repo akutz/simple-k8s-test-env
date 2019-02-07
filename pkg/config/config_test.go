@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 func TestConfigMarshalJSON(t *testing.T) {

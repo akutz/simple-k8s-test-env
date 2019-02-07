@@ -7,7 +7,7 @@ import (
 	"path"
 	"text/template"
 
-	"github.com/vmware/sk8/pkg/app"
+	"vmw.io/sk8/app"
 )
 
 var projectRoot string
@@ -45,7 +45,7 @@ func main() {
 	}
 }
 
-const sk8ResGoTplData = `package app // import "github.com/vmware/sk8/pkg/app"
+const sk8ResGoTplData = `package app // import "vmw.io/sk8/app"
 
 func init() {
 	sk8ScriptRes = ` + "`" + `{{.Data}}` + "`" + `

@@ -1,4 +1,4 @@
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/vim25/types"
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 // Up deploys a Kubernetes cluster using the provided configuration and

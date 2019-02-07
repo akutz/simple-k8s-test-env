@@ -1,4 +1,4 @@
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 // NewVSphereClient returns a new client connection for the provided

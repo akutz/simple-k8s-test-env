@@ -15,8 +15,8 @@ import (
 
 	"github.com/vmware/govmomi/vapi/rest"
 
-	"github.com/vmware/sk8/pkg/app"
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/app"
+	"vmw.io/sk8/config"
 )
 
 const ovaURL = "https://s3-us-west-2.amazonaws.com/cnx.vmware/cicd/photon2-cloud-init.ova"

@@ -1,6 +1,6 @@
 //go:generate go run ../resgen/main.go -project-root ../..
 
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"bytes"

@@ -1,8 +1,8 @@
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"github.com/vmware/govmomi/object"
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 // State is the result of an Up operation.

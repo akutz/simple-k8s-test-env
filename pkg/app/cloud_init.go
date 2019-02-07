@@ -1,4 +1,4 @@
-package app // import "github.com/vmware/sk8/pkg/app"
+package app // import "vmw.io/sk8/app"
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/vmware/sk8/pkg/config"
+	"vmw.io/sk8/config"
 )
 
 // GetCloudInitUserData returns the cloud-init user data.
