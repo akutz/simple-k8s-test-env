@@ -53,11 +53,37 @@ func NewManager(client *rest.Client) *Manager {
 	}
 }
 
+// FindLibraryRequest is the search criteria for finding libraries.
+type FindLibraryRequest struct {
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
+}
+
+// FindLibrary returns one or more libraries that match the provided search
+// criteria.
+//
+// The provided name is case-sensitive.
+//
+// Either the name or type of library may be set to empty values in order
+// to search for all libraries, all libraries with a specific name, regardless
+// of type, or all libraries of a specified type.
+func (c *Manager) FindLibrary(
+	ctx context.Context,
+	search FindLibraryRequest) ([]string, error) {
+
+	url := internal.URL(c, internal.LibraryPath).WithAction("find")
+	spec := struct {
+		Spec FindLibraryRequest `json:"spec"`
+	}{search}
+	var res []string
+	return res, c.Do(ctx, url.Request(http.MethodPost, spec), &res)
+}
+
 // CreateLibrary creates a new library with the given Type, Name,
 // Description, and CategoryID.
 func (c *Manager) CreateLibrary(ctx context.Context, library Library) (string, error) {
 	if library.Type != "LOCAL" {
-		return "", fmt.Errorf("unsupported library type: %s", library.Type)
+		return "", fmt.Errorf("unsupported library type: %q", library.Type)
 	}
 	spec := struct {
 		Library Library `json:"create_spec"`

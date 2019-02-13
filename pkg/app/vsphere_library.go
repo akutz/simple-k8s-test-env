@@ -10,12 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vmware/govmomi/vapi/vcenter"
-
-	"github.com/vmware/govmomi/vim25/types"
-
 	"github.com/vmware/govmomi/vapi/library"
 	"github.com/vmware/govmomi/vapi/rest"
+	"github.com/vmware/govmomi/vapi/vcenter"
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 // LibraryClient is a client for the vSphere content library.
@@ -118,7 +116,7 @@ func (c *LibraryClient) DeployOVF(
 	itemID string,
 	spec vcenter.Deploy) (*types.ManagedObjectReference, error) {
 
-	fmt.Fprintf(c.w, "deploying ovf...")
+	//fmt.Fprintf(c.w, "deploying %s...", spec.DeploymentSpec.Name)
 	echan := make(chan error)
 	rchan := make(chan vcenter.DeployedResourceID)
 
@@ -138,16 +136,16 @@ func (c *LibraryClient) DeployOVF(
 	for {
 		select {
 		case err := <-echan:
-			fmt.Fprintf(c.w, "failed!\n")
+			//fmt.Fprintf(c.w, "failed!\n")
 			return nil, err
 		case ref := <-rchan:
-			fmt.Fprintf(c.w, "success!\n")
+			//fmt.Fprintf(c.w, "success!\n")
 			return &types.ManagedObjectReference{
 				Value: ref.ID,
 				Type:  ref.Type,
 			}, nil
 		default:
-			fmt.Fprintf(c.w, ".")
+			//fmt.Fprintf(c.w, ".")
 			time.Sleep(3 * time.Second)
 		}
 	}
@@ -193,10 +191,10 @@ func (c *LibraryClient) UploadOVA(
 	// Check to see if the OVF file is already present. This indicates
 	// the OVA has already been uploaded.
 	if !overwrite {
-		fmt.Fprintf(c.w, "finding ovf...")
-		if file, _ := c.m.GetLibraryItemFile(
-			ctx, item2.ID, fmt.Sprintf("%s.ovf", item2.Name)); file != nil {
-
+		fmt.Fprintf(c.w, "finding ova...")
+		file, _ := c.m.GetLibraryItemFile(
+			ctx, item2.ID, fmt.Sprintf("%s.ovf", item2.Name))
+		if file != nil && file.Name != "" {
 			fmt.Fprintf(c.w, "success!\n")
 			return item2, nil
 		}

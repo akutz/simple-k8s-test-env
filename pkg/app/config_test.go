@@ -1,3 +1,5 @@
+// +build none
+
 package app_test
 
 import (
@@ -10,10 +12,13 @@ import (
 	"vmw.io/sk8/config"
 )
 
-func TestValidateConfig(t *testing.T) {
-	os.Setenv("SK8_DOMAIN_ID_RAND_SEED", "0")
-
+func TestMarshalConfig(t *testing.T) {
 	ctx := context.Background()
+	os.Setenv("SK8_DOMAIN_ID_RAND_SEED", "0")
+	cfg, err := app.NewConfigFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := config.Config{
 		Nodes: []config.NodeConfig{

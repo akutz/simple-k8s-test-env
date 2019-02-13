@@ -1,240 +1,183 @@
 package app // import "vmw.io/sk8/app"
 
 import (
-	"bytes"
 	"context"
-	crand "crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"fmt"
-	"io/ioutil"
-	"math/big"
-	"math/rand"
-	"net/http"
 	"os"
+	"regexp"
 	"strconv"
-	"time"
-
-	"vmw.io/sk8/config"
 )
 
-// ValidateConfig validates the provided config and updates missing
-// properties with default values or environment variables where
-// applicable.
-func ValidateConfig(
-	ctx context.Context, cfg *config.Config) error {
+// Config is a struct that represents the JSON config data for a sk8 client.
+type Config struct {
+	// Debug instructs the sk8 script to run in debug mode. This
+	// causes `set -x` and sets the log level to DEBUG.
+	Debug bool `json:"debug,omitempty"`
 
-	if cfg.Env == nil {
-		cfg.Env = map[string]string{}
-	}
-	readVSphereConfigEnv(ctx, &cfg.VSphere)
-	if err := validateVSphereConfig(ctx, &cfg.VSphere); err != nil {
+	// Sk8ScriptPath is the path to the sk8 script. This may be a local
+	// file or a URL. If no value is provided then an embedded copy of
+	// the script is uploaded to the nodes via cloud-init.
+	Sk8ScriptPath string `json:"sk8-script-path,omitempty"`
+
+	// Network is the network configuration.
+	Network NetworkConfig `json:"network,omitempty"`
+
+	// Nodes is the configuration for the members of the cluster.
+	Nodes NodeConfig `json:"nodes,omitempty"`
+
+	// SSH is the configuration for accessing the nodes remotely via SSH.
+	SSH SSHConfig `json:"ssh,omitempty"`
+
+	// VSphere is the information used to access the vSphere endpoint
+	// on which the cluster member VMs will be created.
+	VSphere VSphereConfig `json:"vsphere,omitempty"`
+
+	// VCenterSimulatorEnabled indicates whether or not to use the
+	// vCenter simulator as the endpoint for the vSphere cloud provider.
+	// This flag is ignored if the cloud provider is not configured for
+	// the in-tree or external vSphere simulator.
+	VCenterSimulatorEnabled bool `json:"vcsim,omitempty"`
+
+	// TLS is the TLS configuration.
+	TLS TLSConfig `json:"tls,omitempty"`
+
+	// K8s is the kubernetes configuration.
+	K8s KubernetesConfig `json:"k8s,omitempty"`
+
+	// Env is a map of environment variable key/value pairs that are written
+	// to /etc/default/sk8 and are used to configure the sk8 script.
+	Env map[string]string `json:"env,omitempty"`
+}
+
+// Build should be invoked before a call to Environ(). This function
+// sets default values for missing configuration properties as well as
+// validates the configuration data.
+//
+// This function is not safe for concurrent use and should not be
+// called more than once.
+func (c *Config) Build(ctx context.Context) error {
+	if err := c.readEnv(ctx); err != nil {
 		return err
 	}
-	if err := setConfigDefaults(ctx, cfg); err != nil {
+	if err := c.setDefaults(ctx); err != nil {
 		return err
 	}
-
+	if err := c.validate(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
-func setConfigDefaults(ctx context.Context, c *config.Config) error {
+// Environ returns the environment varialble map that is used to write
+// a defaults file for the sk8 script. The map is generated every time
+// the function is called, so be nice.
+func (c *Config) Environ(ctx context.Context) (map[string]string, error) {
+
+	env := map[string]string{}
 	if c.Debug {
-		c.Env["DEBUG"] = "true"
+		env["DEBUG"] = "true"
 	}
 
-	if err := setConfigNodeDefaults(ctx, c); err != nil {
+	// Copy the key/value pairs from the config's own
+	// environment variable map.
+	for k, v := range c.Env {
+		env[k] = v
+	}
+
+	if err := c.VSphere.setEnv(ctx, env); err != nil {
+		return nil, err
+	}
+	if err := c.Network.setEnv(ctx, env); err != nil {
+		return nil, err
+	}
+	if err := c.Nodes.setEnv(ctx, env); err != nil {
+		return nil, err
+	}
+	if err := c.TLS.setEnv(ctx, env); err != nil {
+		return nil, err
+	}
+	if err := c.K8s.setEnv(ctx, env); err != nil {
+		return nil, err
+	}
+	return env, nil
+}
+
+func (c *Config) readEnv(ctx context.Context) error {
+	if ok, _ := strconv.ParseBool(os.Getenv("SK8_DEBUG")); ok {
+		c.Debug = true
+	}
+	// All environment variables beginning with SK8S_ENV_ are stripped
+	// of that prefix and then inserted into the config's env var map.
+	sk8sEnvRX := regexp.MustCompile(`^SK8S_ENV_([^=]+)=(.*)$`)
+	for _, v := range os.Environ() {
+		if m := sk8sEnvRX.FindStringSubmatch(v); len(m) > 0 {
+			if _, ok := c.Env[m[1]]; !ok {
+				c.Env[m[1]] = m[2]
+			}
+		}
+	}
+
+	if err := c.VSphere.readEnv(ctx); err != nil {
 		return err
 	}
-
-	if err := setConfigTLSDefaults(ctx, c); err != nil {
+	if err := c.SSH.readEnv(ctx); err != nil {
 		return err
 	}
-
-	setConfigNetworkDefaults(ctx, c)
-	if err := setConfigKubernetesDefaults(ctx, c); err != nil {
+	if err := c.Network.readEnv(ctx); err != nil {
+		return err
+	}
+	if err := c.Nodes.readEnv(ctx); err != nil {
+		return err
+	}
+	if err := c.TLS.readEnv(ctx); err != nil {
+		return err
+	}
+	if err := c.K8s.readEnv(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func setConfigNodeDefaults(ctx context.Context, c *config.Config) error {
-	// If the config does not define any nodes then provide a default node.
-	numNodes := len(c.Nodes)
-	if numNodes == 0 {
-		c.Nodes = []config.NodeConfig{config.NodeConfig{}}
-		numNodes = 1
+func (c Config) validate(ctx context.Context) error {
+	if err := c.VSphere.validate(ctx); err != nil {
+		return err
 	}
-
-	// Set the defaults for the configured nodes.
-	var numControllers int
-	for i := range c.Nodes {
-		setNodeConfigDefaults(ctx, &c.Nodes[i])
-		switch c.Nodes[i].Type {
-		case config.ControlPlaneNode, config.ControlPlaneWorkerNode:
-			numControllers++
-		}
+	if err := c.SSH.validate(ctx); err != nil {
+		return err
 	}
-
-	c.Env["NUM_NODES"] = strconv.Itoa(numNodes)
-	c.Env["NUM_CONTROLLERS"] = strconv.Itoa(numControllers)
-
-	if numNodes > 1 && c.Env["ETCD_DISCOVERY"] == "" {
-		discoURL := fmt.Sprintf("https://discovery.etcd.io/new?size=%d", numControllers)
-		resp, err := http.Get(discoURL)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		buf, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		c.Env["ETCD_DISCOVERY"] = string(buf)
+	if err := c.Network.validate(ctx); err != nil {
+		return err
 	}
-
-	return nil
-}
-
-func setConfigTLSDefaults(ctx context.Context, c *config.Config) error {
-	if len(c.TLS.CACrt) > 0 || len(c.TLS.CAKey) == 0 {
-		c.TLS.CACrt = nil
-		c.TLS.CAKey = nil
-
-		priv, err := rsa.GenerateKey(crand.Reader, 2048)
-		if err != nil {
-			return err
-		}
-
-		crtTpl := x509.Certificate{
-			SerialNumber: big.NewInt(1),
-			Subject: pkix.Name{
-				CommonName:         "Self-Signed CA",
-				Country:            []string{"US"},
-				Province:           []string{"California"},
-				Locality:           []string{"Palo Alto"},
-				Organization:       []string{"VMware"},
-				OrganizationalUnit: []string{"CNX"},
-			},
-			IsCA:      true,
-			NotBefore: time.Now(),
-			NotAfter:  time.Now().Add(time.Hour * 24 * 365 * 20),
-			KeyUsage: x509.KeyUsageCRLSign |
-				x509.KeyUsageCertSign |
-				x509.KeyUsageDigitalSignature,
-			BasicConstraintsValid: true,
-		}
-
-		derBytes, err := x509.CreateCertificate(
-			crand.Reader, &crtTpl, &crtTpl, &priv.PublicKey, priv)
-		if err != nil {
-			return err
-		}
-
-		caCrtBlock := &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: derBytes,
-		}
-		caKeyBlock := &pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(priv),
-		}
-
-		caCrtPem := &bytes.Buffer{}
-		caKeyPem := &bytes.Buffer{}
-
-		if err := pem.Encode(caCrtPem, caCrtBlock); err != nil {
-			return err
-		}
-		if err := pem.Encode(caKeyPem, caKeyBlock); err != nil {
-			return err
-		}
-
-		c.TLS.CACrt = caCrtPem.Bytes()
-		c.TLS.CAKey = caKeyPem.Bytes()
+	if err := c.Nodes.validate(ctx); err != nil {
+		return err
+	}
+	if err := c.TLS.validate(ctx); err != nil {
+		return err
+	}
+	if err := c.K8s.validate(ctx); err != nil {
+		return err
 	}
 	return nil
 }
 
-func setConfigKubernetesDefaults(
-	ctx context.Context, c *config.Config) error {
-
-	if len(c.K8s.EncryptionKey) > 0 {
-		c.Env["ENCRYPTION_KEY"] = c.K8s.EncryptionKey
+func (c *Config) setDefaults(ctx context.Context) error {
+	if err := c.VSphere.setDefaults(ctx, *c); err != nil {
+		return err
 	}
-
-	return setConfigCloudProviderDefaults(ctx, c)
-}
-
-func setConfigCloudProviderDefaults(
-	ctx context.Context, c *config.Config) error {
-
-	return initCloudProviderConfig(ctx, c)
-}
-
-func setConfigNetworkDefaults(ctx context.Context, c *config.Config) {
-	if len(c.Network.DNS1) == 0 {
-		c.Network.DNS1 = "8.8.8.8"
+	if err := c.SSH.setDefaults(ctx, *c); err != nil {
+		return err
 	}
-	if len(c.Network.DNS2) == 0 {
-		c.Network.DNS2 = "8.8.4.4"
+	if err := c.Network.setDefaults(ctx, *c); err != nil {
+		return err
 	}
-
-	// Generate the domain ID using random data. It's possible to make
-	// the ID deterministic by setting the environment variable
-	// SK8_DOMAIN_ID_RAND_SEED to a valid integer. This value is then
-	// used as the seed for the random generator. For example, setting
-	// SK8_DOMAIN_ID_RAND_SEED=0 causes the domain ID to be 8860b1b.
-	var randSeed int64
-	if i, err := strconv.ParseInt(
-		os.Getenv("SK8_DOMAIN_ID_RAND_SEED"), 10, 64); err == nil {
-		randSeed = i
-	} else {
-		randSeed = time.Now().UTC().UnixNano()
+	if err := c.Nodes.setDefaults(ctx, *c); err != nil {
+		return err
 	}
-	r := rand.New(rand.NewSource(randSeed))
-	b := make([]byte, 32)
-	r.Read(b)
-	domainID := fmt.Sprintf("%x", sha256.Sum256(b))[:7]
-	c.Network.DomainFQDN = fmt.Sprintf("%s.sk8", domainID)
-	c.Env["NETWORK_DOMAIN"] = c.Network.DomainFQDN
-}
-
-func setNodeConfigDefaults(ctx context.Context, c *config.NodeConfig) {
-	switch c.Type {
-	case config.ControlPlaneNode:
-		if c.Cores == 0 && c.CoresPerSocket == 0 {
-			c.Cores = 8
-			c.CoresPerSocket = 4
-		} else if c.Cores == 0 {
-			c.Cores = c.CoresPerSocket
-		} else if c.CoresPerSocket == 0 {
-			c.CoresPerSocket = c.Cores
-		}
-		if c.MemoryMiB == 0 {
-			c.MemoryMiB = 32768
-		}
-		if c.DiskGiB == 0 {
-			c.DiskGiB = 20
-		}
-	case config.ControlPlaneWorkerNode, config.WorkerNode:
-		if c.Cores == 0 && c.CoresPerSocket == 0 {
-			c.Cores = 16
-			c.CoresPerSocket = 4
-		} else if c.Cores == 0 {
-			c.Cores = c.CoresPerSocket
-		} else if c.CoresPerSocket == 0 {
-			c.CoresPerSocket = c.Cores
-		}
-		if c.MemoryMiB == 0 {
-			c.MemoryMiB = 65536
-		}
-		if c.DiskGiB == 0 {
-			c.DiskGiB = 100
-		}
+	if err := c.TLS.setDefaults(ctx, *c); err != nil {
+		return err
 	}
+	if err := c.K8s.setDefaults(ctx, *c); err != nil {
+		return err
+	}
+	return nil
 }

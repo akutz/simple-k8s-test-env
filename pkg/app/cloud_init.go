@@ -7,15 +7,13 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-
-	"vmw.io/sk8/config"
 )
 
 // GetCloudInitUserData returns the cloud-init user data.
 func GetCloudInitUserData(
 	ctx context.Context,
-	cfg config.Config,
-	hostFQDN, nodeType string) ([]byte, error) {
+	cfg Config,
+	node SingleNodeConfig) ([]byte, error) {
 
 	var sk8ScriptURL string
 	if cfg.Sk8ScriptPath != "" {
@@ -36,9 +34,19 @@ func GetCloudInitUserData(
 	}
 
 	sk8DefaultText := &bytes.Buffer{}
-	fmt.Fprintf(sk8DefaultText, `NODE_TYPE=%s`, nodeType)
-	fmt.Fprintln(sk8DefaultText)
-	for k, v := range cfg.Env {
+	switch node.Type {
+	case ControlPlaneNode:
+		fmt.Fprintln(sk8DefaultText, `NODE_TYPE=controller`)
+	case ControlPlaneWorkerNode:
+		fmt.Fprintln(sk8DefaultText, `NODE_TYPE=both`)
+	case WorkerNode:
+		fmt.Fprintln(sk8DefaultText, `NODE_TYPE=worker`)
+	}
+	env, err := cfg.Environ(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting config.Environ: %v", err)
+	}
+	for k, v := range env {
 		fmt.Fprintf(sk8DefaultText, `%s=%q`, k, v)
 		fmt.Fprintln(sk8DefaultText)
 	}
@@ -50,7 +58,7 @@ func GetCloudInitUserData(
 	tpl := template.Must(template.New("t").Parse(cloudInitUserDataTplFormat))
 	buf := &bytes.Buffer{}
 	if err := tpl.Execute(buf, struct {
-		Users          []config.UserConfig
+		Users          []UserConfig
 		Sk8ScriptURL   string
 		Sk8ScriptData  string
 		Sk8DefaultData string
@@ -61,14 +69,14 @@ func GetCloudInitUserData(
 		DomainFQDN     string
 		Sk8ServiceData string
 	}{
-		cfg.Users,
+		cfg.SSH.Users,
 		sk8ScriptURL,
 		sk8ScriptData,
 		sk8DefaultData,
 		base64.StdEncoding.EncodeToString(cfg.TLS.CACrt),
 		base64.StdEncoding.EncodeToString(cfg.TLS.CAKey),
-		hostFQDN,
-		hostFQDN[:len(hostFQDN)-(len(cfg.Network.DomainFQDN)+1)],
+		node.FQDN,
+		node.hostName,
 		cfg.Network.DomainFQDN,
 		base64.StdEncoding.EncodeToString([]byte(sk8ServiceFormat)),
 	}); err != nil {
@@ -80,7 +88,7 @@ func GetCloudInitUserData(
 // GetCloudInitNetworkData returns the cloud-init network data.
 func GetCloudInitNetworkData(
 	ctx context.Context,
-	cfg config.Config) ([]byte, error) {
+	cfg Config) ([]byte, error) {
 
 	tpl := template.Must(template.New("t").Parse(
 		cloudInitNetworkConfigTplFormat))
@@ -104,9 +112,9 @@ func GetCloudInitNetworkData(
 // GetCloudInitMetaData returns the cloud-init metadata.
 func GetCloudInitMetaData(
 	ctx context.Context,
-	cfg config.Config,
+	cfg Config,
 	networkData []byte,
-	hostFQDN string) ([]byte, error) {
+	node SingleNodeConfig) ([]byte, error) {
 
 	encNetworkData, err := Base64GzipBytes(networkData)
 	if err != nil {
@@ -122,8 +130,8 @@ func GetCloudInitMetaData(
 		InstanceID    string
 	}{
 		encNetworkData,
-		hostFQDN,
-		hostFQDN,
+		node.FQDN,
+		node.FQDN,
 	}); err != nil {
 		return nil, err
 	}
@@ -133,10 +141,10 @@ func GetCloudInitMetaData(
 // GetExtraConfig gets the extraconfig data for a VM.
 func GetExtraConfig(
 	ctx context.Context,
-	cfg config.Config,
-	hostFQDN, nodeType string) (ExtraConfig, error) {
+	cfg Config,
+	node SingleNodeConfig) (ExtraConfig, error) {
 
-	userData, err := GetCloudInitUserData(ctx, cfg, hostFQDN, nodeType)
+	userData, err := GetCloudInitUserData(ctx, cfg, node)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +152,7 @@ func GetExtraConfig(
 	if err != nil {
 		return nil, err
 	}
-	metadata, err := GetCloudInitMetaData(ctx, cfg, networkData, hostFQDN)
+	metadata, err := GetCloudInitMetaData(ctx, cfg, networkData, node)
 	if err != nil {
 		return nil, err
 	}
