@@ -12,7 +12,7 @@ import (
 const (
 	vsphereCloudProvider      = "vsphere"
 	externalCloudProvider     = "external"
-	defaultCloudProviderImage = "gcr.io/cloud-provider-vsphere/vsphere-cloud-controller-manager:latest"
+	defaultCloudProviderImage = "gcr.io/cloud-provider-vsphere/vsphere-cloud-controller-manager:v0.1.0"
 )
 
 // CloudProviderConfig is the data used to configure the vSphere cloud provider.
