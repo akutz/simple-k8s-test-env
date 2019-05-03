@@ -1,0 +1,45 @@
+# Configure the cluster settings with a Kubernetes Cluster-API (CAPI)
+# Cluster object (http://bit.ly/2VKXCie).
+apiVersion: cluster.k8s.io/v1alpha1
+kind: Cluster
+metadata:
+  name: sk8-1234567
+spec:
+  providerSpec:
+    value:
+      # This manifest is incomplete as written. Missing values are provided
+      # vai the sk8 default ClusterProviderConfig from valid-defaults.yaml.
+      apiVersion: vsphere.sk8.vmware.io/v1alpha0
+      kind: ClusterProviderConfig
+
+---
+
+# Sk8 uses a CAPI MachineList object (http://bit.ly/2Gc3nyY) to define the
+# members of the Kubernetes cluster.
+apiVersion: cluster.k8s.io/v1alpha1
+kind: MachineList
+items:
+# Define the machine on which the Kubernetes control plane is hosted.
+#
+# Sk8 currently only supports a single-node control plane architecture.
+# HA will be supported by sk8 in concert with the release of Kubernetes 1.17.
+# This is because sk8 supports the current and previous two releases of
+# Kubernetes, and 1.14 was the first release with reliable HA support in
+# kubeadm.
+- apiVersion: cluster.k8s.io/v1alpha1
+  kind: Machine
+  metadata:
+    name: c01.1234567.sk8
+    labels:
+      cluster.k8s.io/cluster-name: sk8-1234567
+      sk8.vmware.io/cluster-role: control-plane,worker
+  spec:
+    versions:
+      kubelet: release/stable
+      controlPlane: release/stable
+    providerSpec:
+      value:
+        # This manifest is incomplete as written. Missing values are provided
+        # via the sk8 default MachineProviderConfig from valid-defaults.yaml.
+        apiVersion: vsphere.sk8.vmware.io/v1alpha0
+        kind: MachineProviderConfig

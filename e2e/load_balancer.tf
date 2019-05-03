@@ -1,3 +1,0 @@
-locals {
-  external_fqdn = ""
-}

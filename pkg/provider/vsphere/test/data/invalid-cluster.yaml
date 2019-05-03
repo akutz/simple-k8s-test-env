@@ -1,0 +1,3 @@
+# This file contains an invalid config sk8 for testing
+kind: not-valid
+apiVersion: sk8.vmware.io/v1alpha0

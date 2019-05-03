@@ -1,0 +1,18 @@
+# Used to verify that multiple defaults files can be consumed.
+apiVersion: vsphere.sk8.vmware.io/v1alpha0
+kind: ClusterProviderConfig
+nat:
+  apiVersion: sk8.vmware.io/v1alpha0
+  kind: LinuxVirtualSwitchConfig
+  publicIPAddr:  0.0.0.0
+
+---
+
+apiVersion: vsphere.sk8.vmware.io/v1alpha0
+kind: MachineProviderConfig
+datacenter: /SDDC-Datacenter2
+network:
+  interfaces:
+  - name: eth0
+  - name: eth1
+  - name: eth2
