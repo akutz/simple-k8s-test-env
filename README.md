@@ -44,8 +44,8 @@ This branch is not configured for automated builds, so to use `sk8` a binary mus
 
 | Binary | MD5 |
 |--------|-----|
-| [sk8.darwin_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.darwin_amd64) | `003c73d6813e1889e0593f36cc04b44e` |
-| [sk8.linux_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.linux_amd64)   | `e37deae50fd0319f7ad4278a7378f611` |
+| [sk8.darwin_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.darwin_amd64) | `207f6e359906ee6e5510c608967c1740` |
+| [sk8.linux_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.linux_amd64)   | `93a47fd1242fba698e4444a6632993c2` |
 
 The next step is to...run sk8! 
 
