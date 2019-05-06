@@ -65,7 +65,7 @@ func Default() (*Cluster, error) {
 // DefaultName returns a cluster name there is exactly one name
 // returned from a call to List. Otherwise an empty string is returned.
 func DefaultName() string {
-	names := List()
+	names := ListNames()
 	if len(names) != 1 {
 		return ""
 	}
@@ -82,8 +82,22 @@ func FilePath(clusterName string, paths ...string) string {
 	return path.Join(append([]string{dataDir, clusterName}, paths...)...)
 }
 
-// List returns the names of the known clusters.
-func List() []string {
+// List returns the known clusters.
+func List() ([]*Cluster, error) {
+	configFiles := listConfigFiles()
+	clusters := make([]*Cluster, len(configFiles))
+	for i, f := range configFiles {
+		c, err := ReadFromFile(f)
+		if err != nil {
+			return nil, err
+		}
+		clusters[i] = c
+	}
+	return clusters, nil
+}
+
+// ListNames returns the names of the known clusters.
+func ListNames() []string {
 	configFiles := listConfigFiles()
 	names := make([]string, len(configFiles))
 	for i := range configFiles {

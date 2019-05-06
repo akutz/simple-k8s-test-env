@@ -134,5 +134,20 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if flags.format == "text" {
+		flags.format = infoTemplate
+	}
+
 	return cluster.PrintInfo(os.Stdout, flags.format, clu)
 }
+
+const infoTemplate = cluster.DefaultTemplate + `
+Print the nodes with the following command:
+  kubectl --kubeconfig {{.Kubeconfig}} get nodes
+
+Query the state of the Kubernetes system components:
+  kubectl --kubeconfig {{.Kubeconfig}} -n kube-system get all
+
+Finally, the cluster may be deleted with:
+  {{.Program}} cluster down {{.Name}}
+`

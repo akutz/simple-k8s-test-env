@@ -18,6 +18,7 @@ package list
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -25,6 +26,7 @@ import (
 )
 
 type flagVals struct {
+	format string
 }
 
 // NewCommand returns a new cobra.Command for printing a parsed configuration
@@ -40,12 +42,40 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(
+		&flags.format, "format", "o", "text",
+		"specify the output format of the summary: json, yaml, text")
+
 	return cmd
 }
 
 func runE(flags flagVals, cmd *cobra.Command, args []string) error {
-	for _, name := range cluster.List() {
-		fmt.Println(name)
+	clusters, err := cluster.List()
+	if err != nil {
+		return err
 	}
+	if flags.format == "json" {
+		fmt.Fprintf(os.Stdout, "[\n")
+	}
+	for i, c := range clusters {
+		err := cluster.PrintInfo(os.Stdout, flags.format, c)
+		if err != nil {
+			return err
+		}
+		if i < len(clusters)-1 {
+			switch flags.format {
+			case "json":
+				fmt.Fprintf(os.Stdout, ",\n")
+			case "yaml":
+				fmt.Fprintf(os.Stdout, "\n---\n\n")
+			default:
+				fmt.Fprintf(os.Stdout, "\n")
+			}
+		}
+	}
+	if flags.format == "json" {
+		fmt.Fprintf(os.Stdout, "]\n")
+	}
+
 	return nil
 }

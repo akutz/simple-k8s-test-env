@@ -30,7 +30,7 @@ import (
 	"vmware.io/sk8/pkg/config"
 )
 
-// PrintInfo information about the cluster.
+// PrintInfo prints information about the cluster.
 func PrintInfo(w io.Writer, format string, cluster *Cluster) error {
 	info, err := GetInfo(cluster)
 	if err != nil {
@@ -42,7 +42,6 @@ func PrintInfo(w io.Writer, format string, cluster *Cluster) error {
 	switch format {
 	case "json":
 		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
 		return enc.Encode(info)
 	case "yaml":
 		buf, err := yaml.Marshal(info)
@@ -137,27 +136,3 @@ type MachineInfo struct {
 func (m MachineInfo) IsController() bool {
 	return m.Roles.Has(config.MachineRoleControlPlane)
 }
-
-// DefaultTemplate is the default Go template used to emit an Info object.
-const DefaultTemplate = `Name:        {{.Name}}{{if .Created}}
-Created:     {{.Created}}{{end}}{{if .Deleted}}
-Deleted:     {{.Deleted}}{{end}}
-Kubeconfig:  {{.Kubeconfig}}
-Machines:{{range .Machines}}
-  Name:      {{.Name}}{{if .Created}}
-  Created:   {{.Created}}{{end}}{{if .Deleted}}
-  Deleted:   {{.Deleted}}{{end}}
-  Roles:     {{.Roles.String}}
-  Versions:{{if .IsController}}
-    Control: {{.Versions.ControlPlane}}{{end}}
-    Kubelet: {{.Versions.Kubelet}}{{end}}{{if not .Deleted}}
-
-Print the nodes with the following command:
-  kubectl --kubeconfig {{.Kubeconfig}} get nodes
-
-Query the state of the Kubernetes system components:
-  kubectl --kubeconfig {{.Kubeconfig}} -n kube-system get all
-
-Finally, the cluster may be deleted with:
-  {{.Program}} cluster down {{.Name}}{{end}}
-`
