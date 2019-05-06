@@ -18,11 +18,14 @@ package cloudinit
 
 import (
 	"context"
+	"io/ioutil"
+	"path"
 
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi/vim25/types"
 	capi "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 
+	"vmware.io/sk8/pkg/config"
 	vutil "vmware.io/sk8/pkg/provider/vsphere/util"
 )
 
@@ -51,6 +54,12 @@ func New(
 	if err != nil {
 		return nil, errors.Wrap(
 			err, "error getting cloud init user data")
+	}
+
+	if confDir := cluster.Labels[config.ConfigDirLabelName]; confDir != "" {
+		ioutil.WriteFile(path.Join(confDir, "metadata.yaml"), metadata, 0640)
+		ioutil.WriteFile(path.Join(confDir, "netwdata.yaml"), netCfg, 0640)
+		ioutil.WriteFile(path.Join(confDir, "userdata.yaml"), userData, 0640)
 	}
 
 	var exCfg extraConfig

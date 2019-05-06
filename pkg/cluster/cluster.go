@@ -284,6 +284,15 @@ func (c *Cluster) UnmarshalText(data []byte) error {
 	return nil
 }
 
+// WithCloudProvider configures the cluster to use the specified
+// cloud provider.
+func (c *Cluster) WithCloudProvider(cloudProvider string) *Cluster {
+	if cloudProvider != "" {
+		c.Cluster.Labels[config.CloudProviderLabelName] = cloudProvider
+	}
+	return c
+}
+
 // WithDefaults updates the Cluster's ClusterProviderConfig object and all of
 // the MachineProviderConfig objects using the default configuration data from
 // the provided file paths.

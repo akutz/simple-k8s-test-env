@@ -191,6 +191,9 @@ metadata: {}
 
 As illustrated above, a sk8 cluster configuration file is a multi-doc YAML file that contains a CAPI Cluster object and a CAPI MachineList object.
 
+## Cloud provider
+Currently sk8 does not do any configuration of any external components, including the Kubernetes cloud provider. However, sk8 *can* bootstrap the cluster to expect that a cloud provider *will be* configured. Use `sk8 cluster up --cloud-provider NAME` to specify that a cloud provider will be configured for the cluster. The `NAME` placeholder can also be set to `external` to indicate an external cloud-controller manager.
+
 ## External access
 Machines provisioned on VMC on AWS are not, by default, accessible from the public internet. sk8 deploys clusters that are externally accessible by using one of two methods:
 

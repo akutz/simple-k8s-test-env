@@ -79,6 +79,9 @@ func GetInfo(c *Cluster) (*Info, error) {
 		if dir := labels[config.ConfigDirLabelName]; dir != "" {
 			info.Kubeconfig = path.Join(dir, "kube.conf")
 		}
+		if ccm := labels[config.CloudProviderLabelName]; ccm != "" {
+			info.CloudProvider = ccm
+		}
 	}
 
 	for i := range info.Machines {
@@ -110,12 +113,13 @@ func GetInfo(c *Cluster) (*Info, error) {
 // Info is a summary of a cluster's information. This object is useful
 // when emitting data as JSON, YAML, or text.
 type Info struct {
-	Name       string        `json:"name"`
-	Created    *metav1.Time  `json:"created,omitempty"`
-	Deleted    *metav1.Time  `json:"deleted,omitempty"`
-	Kubeconfig string        `json:"kubeconfig"`
-	Machines   []MachineInfo `json:"machines"`
-	Program    string        `json:"-"`
+	Name          string        `json:"name"`
+	Created       *metav1.Time  `json:"created,omitempty"`
+	Deleted       *metav1.Time  `json:"deleted,omitempty"`
+	Kubeconfig    string        `json:"kubeconfig"`
+	CloudProvider string        `json:"cloudProvider,omitempty"`
+	Machines      []MachineInfo `json:"machines"`
+	Program       string        `json:"-"`
 }
 
 // MachineInfo is a summary of a machine's information. This object is

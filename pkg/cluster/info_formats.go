@@ -16,16 +16,18 @@ limitations under the License.
 
 package cluster
 
-const DefaultTemplate = `Name:        {{.Name}}{{if .Created}}
-Created:     {{.Created}}{{end}}{{if .Deleted}}
-Deleted:     {{.Deleted}}{{end}}
-Kubeconfig:  {{.Kubeconfig}}
+// DefaultTemplate is used to emit information about a cluster.
+const DefaultTemplate = `Name:          {{.Name}}{{if .Created}}
+Created:       {{.Created}}{{end}}{{if .Deleted}}
+Deleted:       {{.Deleted}}{{end}}
+Kubeconfig:    {{.Kubeconfig}}{{if .CloudProvider}}
+CloudProvider: {{.CloudProvider}}{{end}}
 Machines:{{range .Machines}}
-  Name:      {{.Name}}{{if .Created}}
-  Created:   {{.Created}}{{end}}{{if .Deleted}}
-  Deleted:   {{.Deleted}}{{end}}
-  Roles:     {{.Roles.String}}
+  Name:        {{.Name}}{{if .Created}}
+  Created:     {{.Created}}{{end}}{{if .Deleted}}
+  Deleted:     {{.Deleted}}{{end}}
+  Roles:       {{.Roles.String}}
   Versions:{{if .IsController}}
-    Control: {{.Versions.ControlPlane}}{{end}}
-    Kubelet: {{.Versions.Kubelet}}{{end}}
+    Control:   {{.Versions.ControlPlane}}{{end}}
+    Kubelet:   {{.Versions.Kubelet}}{{end}}
 `

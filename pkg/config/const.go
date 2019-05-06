@@ -42,6 +42,10 @@ const (
 	// kubeconfig, sshconfig, SSH key files, etc.
 	ConfigDirLabelName = GroupName + "/config-dir"
 
+	// CloudProviderLabelName is the name of the label that points to
+	// the cloud provider to configure for the cluster.
+	CloudProviderLabelName = GroupName + "/cloud-provider"
+
 	// Version is the sk8-wide version.
 	Version = "v1alpha0"
 )
