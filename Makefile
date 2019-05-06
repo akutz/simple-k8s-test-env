@@ -36,3 +36,8 @@ upload: build
 	  --grants read=uri=http://acs.amazonaws.com/groups/global/AllUsers && \
 	  echo https://s3-us-west-2.amazonaws.com/cnx.vmware/$(PROGRAM)
 .PHONY: upload
+
+upload-all:
+	GOOS=linux  GOARCH=amd64 PROGRAM=sk8.linux_amd64  $(MAKE) upload
+	GOOS=darwin GOARCH=amd64 PROGRAM=sk8.darwin_amd64 $(MAKE) upload
+.PHONY: upload-all

@@ -8,27 +8,23 @@ The Simple Kubernetes Test Enviornment (sk8) project is:
   * Built to leverage existing tools such as `kubeadm`
 
 ## Quick Start
-The first step when using sk8 is to create a default configuration file at either `${HOME}/.sk8/sk8.conf` or `/etc/sk8/sk8.conf`. This file is a multi-doc YAML manifest of one or more CAPI Cluster or Machine provider configuration objects:
+The first step when using sk8 is to create a default configuration file at either `${HOME}/.sk8/sk8.conf` or `/etc/sk8/sk8.conf`. This file is a multi-doc YAML manifest of one or more CAPI Cluster or Machine provider configuration objects. The example below leverages the AWS account linked to a VMC SDDC in order to provide external access to the deployed machines via an AWS elastic load balancer:
 
 ```yaml
 apiVersion: vsphere.sk8.vmware.io/v1alpha0
 kind: ClusterProviderConfig
-server:       vcenter.com
-username:     myuser
-password:     mypass
+server:   # defaults to env var VSPHERE_SERVER
+username: # defaults to env var VSPHERE_USERNAME
+password: # defaults to env var VSPHERE_PASSWORD
 nat:
-  apiVersion: sk8.vmware.io/v1alpha0
-  kind: LinuxVirtualSwitchConfig
-  publicIPAddr:   192.168.2.20
-  privateIPAddr:  192.168.20.254
-  ssh:
-    addr:           1.2.3.4
-    privateKeyPath: /Users/akutz/.ssh/id_rsa
-    publicKeyPath:  /Users/akutz/.ssh/id_rsa.pub
-    username: akutz
-ssh:
-  privateKeyPath: /Users/akutz/.ssh/id_rsa
-  publicKeyPath:  /Users/akutz/.ssh/id_rsa.pub
+  apiVersion: vsphere.sk8.vmware.io/v1alpha0
+  kind: AWSLoadBalancerConfig
+  accessKeyID:     # defaults to AWS_ACCESS_KEY_ID
+  secretAccessKey: # defaults to AWS_SECRET_ACCESS_KEY
+  region:          # defaults to AWS_DEFAULT_REGION, AWS_REGION
+  healthCheckPort: # defaults to 8888
+  subnetID: subnet-fdee56b6
+  vpcID: vpc-8f7048f6
 
 ---
 
@@ -41,41 +37,49 @@ resourcePool: /dc-1/host/Cluster-1/Resources/Compute-ResourcePool/sk8
 network:
   interfaces:
   - name: eth0
-    network: sddc-cgw-network-lvs-1
+    network: sddc-cgw-network-3
 ```
 
 This branch is not configured for automated builds, so to use `sk8` a binary must be [built from source](#build-from-source) or downloaded for a pre-built OS and architecture:
 
-| Binary                                                                             | MD5                                |
-| ---------------------------------------------------------------------------------- | ---------------------------------- |
-| [sk8.darwin_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.darwin_amd64) | `3171d1fb57383bffbd5f80bc7e34918e` |
-| [sk8.linux_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.linux_amd64)   | `8196213c3792009e9b63f4a329ac7aa9` |
+| Binary | MD5 |
+|--------|-----|
+| [sk8.darwin_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.darwin_amd64) | `003c73d6813e1889e0593f36cc04b44e` |
+| [sk8.linux_amd64](https://s3-us-west-2.amazonaws.com/cnx.vmware/sk8.linux_amd64)   | `e37deae50fd0319f7ad4278a7378f611` |
 
 The next step is to...run sk8! 
 
 ```shell
 $ sk8 cluster up
-Creating cluster "sk8-f666fe3" ...
+Creating cluster "sk8-3eabf10" ...
  ✓ Verifying prerequisites 🎈 
  ✓ Creating 1 machines(s) 🖥 
+ ✓ Configuring control plane 👀 
+Name:        sk8-3eabf10
+Created:     2019-05-06 12:35:28.983283 -0500 CDT m=+6.580907332
+Kubeconfig:  /Users/akutz/.sk8/sk8-3eabf10/kube.conf
+Machines:
+  Name:      c01.3eabf10.sk8
+  Created:   2019-05-06 12:40:18.196913 -0500 CDT m=+295.791836818
+  Roles:     control-plane,worker
+  Versions:
+    Control: v1.14.1
+    Kubelet: v1.14.1
 
-Access Kubernetes with the following command:
-  kubectl --kubeconfig $(sk8 config kube sk8-f666fe3)
+Print the nodes with the following command:
+  kubectl --kubeconfig /Users/akutz/.sk8/sk8-3eabf10/kube.conf get nodes
 
-The nodes may also be accessed with SSH:
-  ssh -F $(sk8 config ssh sk8-f666fe3) HOST
-
-Print the available ssh HOST values using:
-  sk8 config ssh sk8-f666fe3 --hosts
+Query the state of the Kubernetes system components:
+  kubectl --kubeconfig /Users/akutz/.sk8/sk8-3eabf10/kube.conf -n kube-system get all
 
 Finally, the cluster may be deleted with:
-  sk8 cluster down sk8-f666fe3
+  sk8 cluster down sk8-3eabf10
 ```
 
 The above command deploys the most recent GA build of Kubernetes:
 
 ```shell
-$ kubectl --kubeconfig $(sk8 config kube sk8-f666fe3) version
+$ kubectl --kubeconfig $(sk8 config k8s sk8-3eabf10) version
 Client Version: version.Info{Major:"1", Minor:"11", GitVersion:"v1.11.3", GitCommit:"a4529464e4629c21224b3d52edfe0ea91b072862", GitTreeState:"clean", BuildDate:"2018-09-09T18:02:47Z", GoVersion:"go1.10.3", Compiler:"gc", Platform:"darwin/amd64"}
 Server Version: version.Info{Major:"1", Minor:"14", GitVersion:"v1.14.1", GitCommit:"b7394102d6ef778017f2ca4046abbaa23b88c290", GitTreeState:"clean", BuildDate:"2019-04-08T17:02:58Z", GoVersion:"go1.12.1", Compiler:"gc", Platform:"linux/amd64"}
 ```
@@ -87,12 +91,12 @@ sk8 is configured using CAPI configuration objects. Here's the `sk8.conf` data p
 apiVersion: cluster.k8s.io/v1alpha1
 kind: Cluster
 metadata:
-  creationTimestamp: null
+  creationTimestamp: "2019-05-06T17:35:28Z"
   labels:
-    sk8.vmware.io/config-dir: /Users/akutz/.sk8/sk8-f666fe3
+    sk8.vmware.io/config-dir: /Users/akutz/.sk8/sk8-3eabf10
     sk8.vmware.io/kubernetes-build-id: release/stable
     sk8.vmware.io/kubernetes-build-url: https://storage.googleapis.com/kubernetes-release/release/v1.14.1
-  name: sk8-f666fe3
+  name: sk8-3eabf10
 spec:
   clusterNetwork:
     pods:
@@ -105,33 +109,41 @@ spec:
       apiVersion: vsphere.sk8.vmware.io/v1alpha0
       kind: ClusterProviderConfig
       nat:
-        apiVersion: sk8.vmware.io/v1alpha0
-        kind: LinuxVirtualSwitchConfig
-        privateIPAddr: 192.168.20.254
-        publicIPAddr: 192.168.2.20
-        publicNIC: eth0
-        ssh:
-          addr: 1.2.3.4
-          port: 22
-          privateKey: ***
-          privateKeyPath: /Users/akutz/.ssh/id_rsa
-          publicKey: ***
-          publicKeyPath: /Users/akutz/.ssh/id_rsa.pub
-          username: akutz
+        accessKeyID:     # redacted
+        apiVersion: vsphere.sk8.vmware.io/v1alpha0
+        healthCheckPort: 8888
+        kind: AWSLoadBalancerConfig
+        region:          # redacted
+        secretAccessKey: # redacted
+        subnetID: subnet-fdee56b6
+        vpcID: vpc-8f7048f6
       ova:
         method: content-library
         source: https://s3-us-west-2.amazonaws.com/cnx.vmware/photon3-cloud-init.ova
         target: /sk8/photon3-cloud-init
-      password: 
-      server: vcenter.com
+      password: # redacted
+      server:   # redacted
       ssh:
-        privateKey: ***
-        privateKeyPath: /Users/akutz/.ssh/id_rsa
-        publicKey: ***
-        publicKeyPath: /Users/akutz/.ssh/id_rsa.pub
+        privateKey: # redacted
+        publicKey:  # redacted
         username: sk8
-      username: myuser
-status: {}
+      username:     # redacted
+status:
+  apiEndpoints:
+  - host: sk8-3eabf10-65533edb50203bd1.elb.us-west-2.amazonaws.com
+    port: 443
+  providerStatus:
+    aws:
+      apiTargetGroupARN: arn:aws:elasticloadbalancing:us-west-2:571501312763:targetgroup/sk8-3eabf10-api/6d96ba18d519ebd8
+      loadBalancerARN: arn:aws:elasticloadbalancing:us-west-2:571501312763:loadbalancer/net/sk8-3eabf10/65533edb50203bd1
+      loadBalancerDNS: sk8-3eabf10-65533edb50203bd1.elb.us-west-2.amazonaws.com
+      sshTargetGroupARN: arn:aws:elasticloadbalancing:us-west-2:571501312763:targetgroup/sk8-3eabf10-ssh/9b1cf2c82a8a28a4
+    kubeJoinCmd: kubeadm join 192.168.3.218:443 --token uzq5qr.e4vll2ltsi5irksj --discovery-token-ca-cert-hash
+      sha256:8d6f4985b8dcf8a00a4ef2f56972b770893b878d55b86dc63529d8c847bc46b9
+    ovaID: 4a92e848-b44d-4ebb-8ba8-9b75fe0fe45a
+    ssh:
+      addr: sk8-3eabf10-65533edb50203bd1.elb.us-west-2.amazonaws.com
+      port: 22
 
 
 ---
@@ -141,13 +153,13 @@ items:
 - apiVersion: cluster.k8s.io/v1alpha1
   kind: Machine
   metadata:
-    creationTimestamp: null
+    creationTimestamp: "2019-05-06T17:40:18Z"
     labels:
-      cluster.k8s.io/cluster-name: sk8-f666fe3
+      cluster.k8s.io/cluster-name: sk8-3eabf10
       sk8.vmware.io/cluster-role: control-plane,worker
       sk8.vmware.io/kubernetes-build-id: release/stable
       sk8.vmware.io/kubernetes-build-url: https://storage.googleapis.com/kubernetes-release/release/v1.14.1
-    name: c01.f666fe3.sk8
+    name: c01.3eabf10.sk8
   spec:
     metadata:
       creationTimestamp: null
@@ -161,7 +173,7 @@ items:
         network:
           interfaces:
           - name: eth0
-            network: sddc-cgw-network-lvs-1
+            network: sddc-cgw-network-3
         ova:
           method: content-library
           source: /sk8/photon3-cloud-init
@@ -169,13 +181,27 @@ items:
     versions:
       controlPlane: v1.14.1
       kubelet: v1.14.1
-  status: {}
+  status:
+    addresses:
+    - address: 192.168.3.218
+      type: InternalIP
 kind: MachineList
 metadata: {}
-
 ```
 
 As illustrated above, a sk8 cluster configuration file is a multi-doc YAML file that contains a CAPI Cluster object and a CAPI MachineList object.
+
+## External access
+Machines provisioned on VMC on AWS are not, by default, accessible from the public internet. sk8 deploys clusters that are externally accessible by using one of two methods:
+
+1. [LVS host](#linux-virtual-switch)
+2. [AWS load balancer](#aws-load-balancer)
+
+### Linux virtual switch
+TODO
+
+### AWS load balancer
+TODO
 
 ## How does sk8 work?
 sk8 leverages the CAPI object model and ships with support for deploying clusters to VMware Cloud (VMC) on AWS with external access provided by a Linux Virtual Switch (LVS) host or an AWS load balancer.
