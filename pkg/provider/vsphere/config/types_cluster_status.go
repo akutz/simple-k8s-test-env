@@ -17,8 +17,11 @@ limitations under the License.
 package config
 
 import (
+	"encoding/json"
 	"sync"
 
+	aws_session "github.com/aws/aws-sdk-go/aws/session"
+	aws_elb "github.com/aws/aws-sdk-go/service/elbv2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"vmware.io/sk8/pkg/config"
@@ -30,6 +33,18 @@ type ClusterStatus struct {
 	// TypeMeta representing the type of the object and its API schema version.
 	metav1.TypeMeta `json:",inline"`
 
+	// KubeJoinCmd is the token used to join the cluster.
+	KubeJoinCmd string `json:"kubeJoinCmd,omitempty"`
+
+	// OVAID is the ID of the OVA to deploy.
+	OVAID string `json:"ovaID,omitempty"`
+
+	// SSH is the bastion host used to access the machines via SSH.
+	SSH *config.SSHEndpoint `json:"ssh,omitempty"`
+
+	// AWS is the status of the AWSLoadBalancer NAT provider
+	AWS *AWSLoadBalancerStatus `json:"aws,omitempty"`
+
 	// ControlPlaneCanOwn is a channel used to signal that a machine is
 	// responsible for initializing the control plane.
 	ControlPlaneCanOwn chan struct{} `json:"-"`
@@ -37,15 +52,6 @@ type ClusterStatus struct {
 	// ControlPlaneOnline is a channel that is closed once the control
 	// plane is online.
 	ControlPlaneOnline chan struct{} `json:"-"`
-
-	// KubeJoinCmd is the token used to join the cluster.
-	KubeJoinCmd string `json:"kubeJoinCmd"`
-
-	// OVAID is the ID of the OVA to deploy.
-	OVAID string `json:"ovaID"`
-
-	// SSH is the bastion host used to access the machines via SSH.
-	SSH *config.SSHEndpoint `json:"ssh"`
 
 	// SSHConfigMu controls access to the local SSH config file.
 	SSHConfigMu sync.Mutex `json:"-"`
@@ -70,5 +76,57 @@ func (in *ClusterStatus) DeepCopy() *ClusterStatus {
 		out.SSH = &config.SSHEndpoint{}
 		in.SSH.DeepCopyInto(out.SSH)
 	}
+	if in.AWS != nil {
+		out.AWS = &AWSLoadBalancerStatus{}
+		in.AWS.DeepCopyInto(out.AWS)
+	}
 	return out
 }
+
+// AWSLoadBalancerStatus contains information about the AWSLoadBalancer
+// NAT provider.
+type AWSLoadBalancerStatus struct {
+	Session      *aws_session.Session  `json:"-"`
+	LoadBalancer *aws_elb.LoadBalancer `json:"-"`
+	API          *aws_elb.TargetGroup  `json:"-"`
+	SSH          *aws_elb.TargetGroup  `json:"-"`
+	CanOwn       chan struct{}         `json:"-"`
+	Online       chan struct{}         `json:"-"`
+}
+
+func (in *AWSLoadBalancerStatus) DeepCopy() *AWSLoadBalancerStatus {
+	out := &AWSLoadBalancerStatus{
+		Session:      in.Session,
+		LoadBalancer: in.LoadBalancer,
+		API:          in.API,
+		SSH:          in.SSH,
+		CanOwn:       make(chan struct{}, 1),
+		Online:       make(chan struct{}),
+	}
+	out.CanOwn <- struct{}{}
+	return out
+}
+
+func (in *AWSLoadBalancerStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		LoadBalancerARN   *string `json:"loadBalancerARN,omitempty"`
+		LoadBalancerDNS   *string `json:"loadBalancerDNS,omitempty"`
+		APITargetGroupARN *string `json:"apiTargetGroupARN,omitempty"`
+		SSHTargetGroupARN *string `json:"sshTargetGroupARN,omitempty"`
+	}{
+		LoadBalancerARN:   in.LoadBalancer.LoadBalancerArn,
+		LoadBalancerDNS:   in.LoadBalancer.DNSName,
+		APITargetGroupARN: in.API.TargetGroupArn,
+		SSHTargetGroupARN: in.SSH.TargetGroupArn,
+	})
+}
+
+/*type SSHStatus struct {
+	sync.Mutex
+
+	// Bastion is the bastion host used to access the machines via SSH.
+	Bastion *config.SSHEndpoint `json:"ssh"`
+
+	// SSHConfigMu controls access to the local SSH config file.
+	SSHConfigMu sync.Mutex `json:"-"`
+}*/

@@ -27,9 +27,14 @@ import (
 // Public to allow building arbitrary schemes.
 // All generated defaulters are covering - they call all nested defaulters.
 func RegisterDefaults(scheme *runtime.Scheme) error {
+	scheme.AddTypeDefaultingFunc(&AWSLoadBalancerConfig{}, func(obj interface{}) { SetObjectDefaults_AWSLoadBalancerConfig(obj.(*AWSLoadBalancerConfig)) })
 	scheme.AddTypeDefaultingFunc(&ClusterProviderConfig{}, func(obj interface{}) { SetObjectDefaults_ClusterProviderConfig(obj.(*ClusterProviderConfig)) })
 	scheme.AddTypeDefaultingFunc(&MachineProviderConfig{}, func(obj interface{}) { SetObjectDefaults_MachineProviderConfig(obj.(*MachineProviderConfig)) })
 	return nil
+}
+
+func SetObjectDefaults_AWSLoadBalancerConfig(in *AWSLoadBalancerConfig) {
+	SetDefaults_AWSLoadBalancerConfig(in)
 }
 
 func SetObjectDefaults_ClusterProviderConfig(in *ClusterProviderConfig) {

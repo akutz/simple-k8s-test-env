@@ -17,6 +17,8 @@ limitations under the License.
 package config
 
 import (
+	"os"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,7 +36,11 @@ type AWSLoadBalancerConfig struct {
 	// +optional
 	Region string `json:"region,omitempty"`
 	// +optional
-	MaxRetries int `json:"maxRetries,omitempty"`
+	MaxRetries int32 `json:"maxRetries,omitempty"`
+
+	// Defaults to 8888
+	// +optional
+	HealthCheckPort int32 `json:"healthCheckPort,omitempty"`
 
 	// SubnetID is the ID of the subnet connected to VMC.
 	//
@@ -47,4 +53,23 @@ type AWSLoadBalancerConfig struct {
 	// An object missing this field at runtime is invalid.
 	// +optional
 	VpcID string `json:"vpcID,omitempty"`
+}
+
+// SetDefaults_AWSLoadBalancerConfig sets uninitialized fields to their default value.
+func SetDefaults_AWSLoadBalancerConfig(obj *AWSLoadBalancerConfig) {
+	if obj.AccessKeyID == "" {
+		obj.AccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
+	if obj.SecretAccessKey == "" {
+		obj.SecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if obj.Region == "" {
+		obj.Region = os.Getenv("AWS_DEFAULT_REGION")
+		if obj.Region == "" {
+			obj.Region = os.Getenv("AWS_REGION")
+		}
+	}
+	if obj.HealthCheckPort == 0 {
+		obj.HealthCheckPort = 8888
+	}
 }

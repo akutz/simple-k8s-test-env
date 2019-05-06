@@ -19,14 +19,8 @@ package cluster
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	capi "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-
-	"vmware.io/sk8/pkg/config"
-	"vmware.io/sk8/pkg/net/lvs"
-	"vmware.io/sk8/pkg/net/ssh"
-	vutil "vmware.io/sk8/pkg/provider/vsphere/util"
 )
 
 // Delete the cluster.
@@ -38,43 +32,18 @@ func (a actuator) Delete(cluster *capi.Cluster) error {
 func (a actuator) DeleteWithContext(
 	ctx context.Context, cluster *capi.Cluster) error {
 
-	// Get the cluster provider config.
-	ccfg := vutil.GetClusterProviderConfig(cluster)
+	return a.deleteWithContext(ctx, cluster)
+}
 
-	// Check to see if the cluster provider is using a NAT provider.
-	switch tnat := ccfg.NAT.Object.(type) {
-	case *config.LinuxVirtualSwitchConfig:
-		sshClient, err := ssh.NewClient(
-			tnat.SSH.SSHEndpoint,
-			tnat.SSH.SSHCredential)
-		if err != nil {
-			return errors.Wrap(err, "error dialing lvs host")
-		}
-		defer sshClient.Close()
-		deleteService := func(sid string) error {
-			err := lvs.DeleteTCPService(
-				ctx,
-				sshClient,
-				tnat.PublicNIC,
-				sid,
-				tnat.PublicIPAddr.String())
-			if err != nil {
-				return errors.Wrapf(
-					err, "error deleting lvs service %q", sid)
-			}
-			log.WithFields(log.Fields{
-				"service": sid,
-				"cluster": cluster.Name,
-			}).Info("deleted lvs service")
-			return nil
-		}
-		if err := deleteService(cluster.Name + "-api"); err != nil {
-			return err
-		}
-		if err := deleteService(cluster.Name + "-ssh"); err != nil {
-			return err
-		}
+func (a actuator) deleteWithContext(
+	parent context.Context, cluster *capi.Cluster) error {
+
+	ctx, err := newRequestContext(parent, cluster)
+	if err != nil {
+		return err
 	}
-
+	if err := a.natDelete(ctx); err != nil {
+		log.WithError(err).Debug("error delting nat resources")
+	}
 	return nil
 }

@@ -18,7 +18,6 @@ package info
 
 import (
 	"os"
-	"text/template"
 
 	"github.com/spf13/cobra"
 
@@ -26,6 +25,7 @@ import (
 )
 
 type flagVals struct {
+	format string
 }
 
 // NewCommand returns a new cobra.Command for cluster creation
@@ -41,14 +41,20 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(
+		&flags.format, "format", "o", "text",
+		"specify the output format of the summary: json, yaml, text")
+
 	return cmd
 }
 
 func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		if name := cluster.DefaultName(); name != "" {
-			args = append(args, name)
+		name := cluster.DefaultName()
+		if name == "" {
+			return nil
 		}
+		args = append(args, name)
 	}
 	clu, err := cluster.Load(args[0])
 	if err != nil {
@@ -60,31 +66,5 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 	if _, err := cluster.WithStdDefaults(clu); err != nil {
 		return err
 	}
-	return Print(clu)
+	return cluster.PrintInfo(os.Stdout, flags.format, clu)
 }
-
-// Print information about the cluster.
-func Print(clu *cluster.Cluster) error {
-	tpl := template.Must(template.New("t").Parse(onlineMsgFormat))
-	return tpl.Execute(os.Stdout, struct {
-		Name    string
-		Program string
-	}{
-		Name:    clu.Cluster.Name,
-		Program: os.Args[0],
-	})
-}
-
-const onlineMsgFormat = `
-Access Kubernetes with the following command:
-  kubectl --kubeconfig $({{.Program}} config kube {{.Name}})
-
-The nodes may also be accessed with SSH:
-  ssh -F $({{.Program}} config ssh {{.Name}}) HOST
-
-Print the available ssh HOST values using:
-  {{.Program}} config ssh {{.Name}} --hosts
-
-Finally, the cluster may be deleted with:
-  {{.Program}} cluster down {{.Name}}
-`

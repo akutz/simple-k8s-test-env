@@ -95,14 +95,7 @@ func (r *MachineRole) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &roles); err != nil {
 		return err
 	}
-	for _, s := range roles {
-		switch s {
-		case "control-plane":
-			r.Set(MachineRoleControlPlane)
-		case "worker":
-			r.Set(MachineRoleWorker)
-		}
-	}
+	parseMachineRoleStrings(r, roles)
 	return nil
 }
 

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -403,4 +404,27 @@ func (c *Cluster) WriteToFile(path string) (int64, error) {
 	}
 	defer f.Close()
 	return c.WriteTo(f)
+}
+
+// WriteToDisk writes the object to a file named "sk8.conf" in the directory
+// specified by the cluster label config.ConfigDirLabelName.
+func (c *Cluster) WriteToDisk() error {
+	if c == nil {
+		return nil
+	}
+	if len(c.Cluster.Labels) == 0 {
+		return nil
+	}
+	confDir := c.Cluster.Labels[config.ConfigDirLabelName]
+	if confDir == "" {
+		return nil
+	}
+	os.MkdirAll(confDir, 0755)
+
+	confFile := path.Join(confDir, "sk8.conf")
+	if _, err := c.WriteToFile(confFile); err != nil {
+		return err
+	}
+
+	return nil
 }

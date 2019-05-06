@@ -31,6 +31,7 @@ import (
 	"vmware.io/sk8/pkg/config"
 	"vmware.io/sk8/pkg/net/lvs"
 	"vmware.io/sk8/pkg/net/ssh"
+	"vmware.io/sk8/pkg/status"
 )
 
 func (a actuator) apiEnsure(ctx *reqctx) error {
@@ -45,7 +46,11 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 		// Machines that are not members of the control plane can only wait
 		// for the control plane to come online.
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-ctx.csta.ControlPlaneCanOwn:
+			defer status.End(ctx, false)
+			status.Start(ctx, "Configuring control plane 👀")
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
@@ -55,6 +60,7 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 			if err := a.apiEnsureLocalConf(ctx); err != nil {
 				return err
 			}
+			status.End(ctx, true)
 		case <-ctx.csta.ControlPlaneOnline:
 		}
 	}

@@ -177,6 +177,8 @@ func SetDefaults_ClusterProviderConfig(obj *ClusterProviderConfig) {
 		switch cfg := obj.NAT.Object.(type) {
 		case *config.LinuxVirtualSwitchConfig:
 			config.SetObjectDefaults_LinuxVirtualSwitchConfig(cfg)
+		case *AWSLoadBalancerConfig:
+			SetDefaults_AWSLoadBalancerConfig(cfg)
 		}
 	}
 }

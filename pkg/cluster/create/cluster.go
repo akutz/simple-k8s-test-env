@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -52,6 +53,7 @@ func Cluster(ctx context.Context, obj *cluster.Cluster) error {
 			return errors.Wrapf(
 				err, "error creating cluster %q", clu.Name)
 		}
+		clu.CreationTimestamp.Time = time.Now()
 		status.End(ctx, true)
 	}
 
@@ -95,6 +97,7 @@ func Cluster(ctx context.Context, obj *cluster.Cluster) error {
 					"error creating machine %q for cluster %q",
 					machine.Name, clu.Name)
 			}
+			machine.CreationTimestamp.Time = time.Now()
 		}()
 	}
 

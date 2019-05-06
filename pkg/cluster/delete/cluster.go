@@ -19,10 +19,12 @@ package delete
 import (
 	"context"
 	"fmt"
-	"os"
+	//"os"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"vmware.io/sk8/pkg/cluster"
 	"vmware.io/sk8/pkg/provider"
@@ -50,10 +52,13 @@ func Cluster(ctx context.Context, obj *cluster.Cluster) error {
 		act := provider.NewMachineActuator(gvk.Group)
 
 		// Delete the machine.
+		log.WithField("name", machine.Name).Debug("deleting machine")
 		if err := act.Delete(ctx, clu, machine); err != nil {
 			return errors.Wrapf(
 				err, "error deleting machine %q", machine.Name)
 		}
+
+		machine.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 	}
 
 	{
@@ -63,6 +68,7 @@ func Cluster(ctx context.Context, obj *cluster.Cluster) error {
 		act := provider.NewClusterActuator(gvk.Group)
 
 		// Delete the cluster.
+		log.WithField("name", clu.Name).Debug("deleting cluster")
 		status.Start(ctx, "Deleting cluster 🗄")
 		var err error
 		if act2, ok := act.(cluster.ActuatorWithContext); ok {
@@ -74,13 +80,14 @@ func Cluster(ctx context.Context, obj *cluster.Cluster) error {
 			return errors.Wrapf(
 				err, "error deleting cluster %q", clu.Name)
 		}
+		clu.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 	}
 
 	// Delete the cluster's local config directory.
-	if p := cluster.FilePath(clu.Name); p != "" {
-		log.WithField("path", p).Debug("removing cluster data directory")
-		os.RemoveAll(p)
-	}
+	//if p := cluster.FilePath(clu.Name); p != "" {
+	//	log.WithField("path", p).Debug("removing cluster data directory")
+	//	os.RemoveAll(p)
+	//}
 	status.End(ctx, true)
 
 	return nil

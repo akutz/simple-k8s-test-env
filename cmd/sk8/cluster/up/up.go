@@ -18,12 +18,10 @@ package up
 
 import (
 	"os"
-	"path"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"vmware.io/sk8/cmd/sk8/cluster/info"
 	"vmware.io/sk8/pkg/cluster"
 	"vmware.io/sk8/pkg/cluster/create"
 	"vmware.io/sk8/pkg/config"
@@ -40,6 +38,8 @@ type flagVals struct {
 	dryRun  bool
 	roles   []string
 	timeout time.Duration
+	format  string
+	buildID string
 }
 
 // NewCommand returns a new cobra.Command for cluster creation
@@ -47,7 +47,7 @@ func NewCommand() *cobra.Command {
 	flags := flagVals{}
 	cmd := &cobra.Command{
 		Args:  cobra.MaximumNArgs(1),
-		Use:   "up [build-id]",
+		Use:   "up [cluster-name]",
 		Short: "Turns up a Kubernetes cluster",
 		Long:  "Turns up a Kubernetes cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,10 +55,17 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(
+		&flags.buildID, "build-id", "b",
+		"release/stable",
+		"the Kubernetes build ID to deploy: release/*, ci/*, semver")
 	cmd.Flags().BoolVar(
 		&flags.dryRun, "dry-run", false,
 		"specify this flag to emit the calculated cluster manifest without "+
 			"actually applying any changes")
+	cmd.Flags().StringVarP(
+		&flags.format, "format", "o", "text",
+		"specify the output format of the summary: json, yaml, text")
 	cmd.Flags().DurationVar(
 		&flags.timeout, "timeout", time.Minute*15,
 		"amount of time to wait for the cluster to come online")
@@ -76,34 +83,38 @@ func NewCommand() *cobra.Command {
 }
 
 func runE(flags flagVals, cmd *cobra.Command, args []string) error {
-	roles := make([]config.MachineRole, len(flags.roles))
-	for i, r := range flags.roles {
-		if err := roles[i].UnmarshalText([]byte(r)); err != nil {
+	var clu *cluster.Cluster
+	if len(args) == 1 {
+		clu2, err := cluster.Load(args[0])
+		if err != nil {
 			return err
 		}
+		clu = clu2
 	}
-
-	clu, err := cluster.NewFromRoles(
-		vsphere.SchemeGroupVersion.WithKind("ClusterProviderConfig"),
-		vsphere.SchemeGroupVersion.WithKind("MachineProviderConfig"),
-		roles...)
-	if err != nil {
-		return err
-	}
-
-	if _, err := clu.WithNewName(); err != nil {
-		return err
-	}
-
-	if len(args) == 0 {
-		args = []string{"release/stable"}
-	}
-	if _, err := clu.WithKubernetesBuildID(args[0]); err != nil {
-		return err
-	}
-
-	if _, err := cluster.WithStdDefaults(clu); err != nil {
-		return err
+	if clu == nil {
+		roles := make([]config.MachineRole, len(flags.roles))
+		for i, r := range flags.roles {
+			if err := roles[i].UnmarshalText([]byte(r)); err != nil {
+				return err
+			}
+		}
+		clu2, err := cluster.NewFromRoles(
+			vsphere.SchemeGroupVersion.WithKind("ClusterProviderConfig"),
+			vsphere.SchemeGroupVersion.WithKind("MachineProviderConfig"),
+			roles...)
+		if err != nil {
+			return err
+		}
+		if _, err := clu2.WithNewName(); err != nil {
+			return err
+		}
+		if _, err := clu2.WithKubernetesBuildID(flags.buildID); err != nil {
+			return err
+		}
+		if _, err := cluster.WithStdDefaults(clu2); err != nil {
+			return err
+		}
+		clu = clu2
 	}
 
 	if flags.dryRun {
@@ -111,10 +122,7 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	confFileDir := cluster.FilePath(clu.Cluster.Name)
-	os.MkdirAll(confFileDir, 0750)
-	confFilePath := path.Join(confFileDir, "sk8.conf")
-	if _, err := clu.WriteToFile(confFilePath); err != nil {
+	if err := clu.WriteToDisk(); err != nil {
 		return err
 	}
 
@@ -122,5 +130,9 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return info.Print(clu)
+	if err := clu.WriteToDisk(); err != nil {
+		return err
+	}
+
+	return cluster.PrintInfo(os.Stdout, flags.format, clu)
 }

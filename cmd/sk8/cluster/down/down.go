@@ -46,9 +46,11 @@ func NewCommand() *cobra.Command {
 
 func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		if name := cluster.DefaultName(); name != "" {
-			args = append(args, name)
+		name := cluster.DefaultName()
+		if name == "" {
+			return nil
 		}
+		args = append(args, name)
 	}
 
 	for _, name := range args {
@@ -60,6 +62,9 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if err := delete.Cluster(status.Context(), clu); err != nil {
+			return err
+		}
+		if err := clu.WriteToDisk(); err != nil {
 			return err
 		}
 	}

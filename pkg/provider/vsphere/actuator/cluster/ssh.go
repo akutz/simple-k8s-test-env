@@ -50,7 +50,7 @@ func (a actuator) sshEnsure(ctx *reqctx) error {
 	if err := ioutil.WriteFile(
 		keyPath,
 		ctx.ccfg.SSH.PrivateKey,
-		0400); err != nil {
+		0600); err != nil {
 		return errors.Wrapf(
 			err,
 			"error writing ssh private key file to %q",
@@ -60,7 +60,7 @@ func (a actuator) sshEnsure(ctx *reqctx) error {
 	if err := ioutil.WriteFile(
 		pubPath,
 		ctx.ccfg.SSH.PublicKey,
-		0440); err != nil {
+		0640); err != nil {
 		return errors.Wrapf(
 			err,
 			"error writing ssh public key file to %q",
