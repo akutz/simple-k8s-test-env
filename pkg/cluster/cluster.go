@@ -293,6 +293,15 @@ func (c *Cluster) WithCloudProvider(cloudProvider string) *Cluster {
 	return c
 }
 
+// WithPodNetworkCidr configures a cluster with a pod network cidr
+func (c *Cluster) WithPodNetworkCidr(podCidr string) *Cluster {
+	if podCidr != "" {
+		c.Cluster.Labels[config.PodNetworkCidrLabelName] = podCidr
+	}
+
+	return c
+}
+
 // WithDefaults updates the Cluster's ClusterProviderConfig object and all of
 // the MachineProviderConfig objects using the default configuration data from
 // the provided file paths.

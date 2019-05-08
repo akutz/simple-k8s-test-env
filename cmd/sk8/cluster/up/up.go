@@ -35,12 +35,13 @@ var (
 )
 
 type flagVals struct {
-	dryRun        bool
-	roles         []string
-	timeout       time.Duration
-	format        string
-	buildID       string
-	cloudProvider string
+	dryRun         bool
+	roles          []string
+	timeout        time.Duration
+	format         string
+	buildID        string
+	cloudProvider  string
+	podNetworkCidr string
 }
 
 // NewCommand returns a new cobra.Command for cluster creation
@@ -64,6 +65,10 @@ func NewCommand() *cobra.Command {
 		&flags.cloudProvider, "cloud-provider",
 		"",
 		"the name of a cloud provider; ex. aws, vsphere, external, etc.")
+	cmd.Flags().StringVar(
+		&flags.podNetworkCidr, "pod-network-cidr",
+		"",
+		"the pod network cidr allocated for the cluster.")
 	cmd.Flags().BoolVar(
 		&flags.dryRun, "dry-run", false,
 		"specify this flag to emit the calculated cluster manifest without "+
@@ -120,6 +125,7 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 			return err
 		}
 		clu2.WithCloudProvider(flags.cloudProvider)
+		clu2.WithPodNetworkCidr(flags.podNetworkCidr)
 		clu = clu2
 	}
 

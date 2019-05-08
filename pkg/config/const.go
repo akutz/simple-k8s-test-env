@@ -46,6 +46,10 @@ const (
 	// the cloud provider to configure for the cluster.
 	CloudProviderLabelName = GroupName + "/cloud-provider"
 
+	// PodNetworkCidrLabelName is the name of the label that indicates
+	// the pod network cidr allocated to the cluster
+	PodNetworkCidrLabelName = GroupName + "/pod-network-cidr"
+
 	// Version is the sk8-wide version.
 	Version = "v1alpha0"
 )

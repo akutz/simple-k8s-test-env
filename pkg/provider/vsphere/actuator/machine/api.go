@@ -122,11 +122,16 @@ func (a actuator) apiEnsureInit(ctx *reqctx) error {
 	}
 	defer sshClient.Close()
 
-	cmd := &bytes.Buffer{}
-	fmt.Fprintf(
-		cmd,
-		"sudo kubeadm init --kubernetes-version=%q --apiserver-bind-port=443",
+	kubeadmInit := fmt.Sprintf("sudo kubeadm init --kubernetes-version=%q --apiserver-bind-port=443",
 		ctx.machine.Spec.Versions.ControlPlane)
+
+	podNetworkCidr, ok := ctx.cluster.Labels[config.PodNetworkCidrLabelName]
+	if ok {
+		kubeadmInit = kubeadmInit + fmt.Sprintf(" --pod-network-cidr=%q", podNetworkCidr)
+	}
+
+	cmd := &bytes.Buffer{}
+	fmt.Fprintf(cmd, kubeadmInit)
 
 	for _, e := range ctx.cluster.Status.APIEndpoints {
 		fmt.Fprintf(cmd, " --apiserver-cert-extra-sans=%q", e.Host)
