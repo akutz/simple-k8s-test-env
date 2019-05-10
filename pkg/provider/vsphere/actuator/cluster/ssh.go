@@ -24,12 +24,23 @@ import (
 	"github.com/pkg/errors"
 
 	"vmware.io/sk8/pkg/config"
+	"vmware.io/sk8/pkg/net/ssh"
 )
 
 func (a actuator) sshEnsure(ctx *reqctx) error {
 	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
 	if configDir == "" {
 		return nil
+	}
+
+	// Generate keys if they are necessary.
+	if len(ctx.ccfg.SSH.PublicKey) == 0 {
+		key, pub, err := ssh.KeyGen()
+		if err != nil {
+			return err
+		}
+		ctx.ccfg.SSH.PrivateKey = key
+		ctx.ccfg.SSH.PublicKey = pub
 	}
 
 	// Write the SSH config to disk.

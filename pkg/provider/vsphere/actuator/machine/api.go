@@ -21,10 +21,8 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -56,10 +54,8 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
-			if ok, _ := strconv.ParseBool(os.Getenv("KUBE_NETWORK_DISABLED")); !ok {
-				if err := a.apiEnsureNetwork(ctx); err != nil {
-					return err
-				}
+			if err := a.apiEnsureNetwork(ctx); err != nil {
+				return err
 			}
 			if err := a.apiEnsureLocalConf(ctx); err != nil {
 				return err
@@ -129,14 +125,27 @@ func (a actuator) apiEnsureInit(ctx *reqctx) error {
 	cmd := &bytes.Buffer{}
 	fmt.Fprintf(
 		cmd,
-		"sudo kubeadm init --kubernetes-version=%q --apiserver-bind-port=443",
+		"sudo kubeadm init --apiserver-bind-port=443"+
+			" --kubernetes-version=%q",
 		ctx.machine.Spec.Versions.ControlPlane)
 
 	for _, e := range ctx.cluster.Status.APIEndpoints {
 		fmt.Fprintf(cmd, " --apiserver-cert-extra-sans=%q", e.Host)
 	}
+	if n := ctx.cluster.Spec.ClusterNetwork; true {
+		if v := n.Pods.CIDRBlocks; len(v) > 0 {
+			fmt.Fprintf(cmd, " --pod-network-cidr=%q", v[0])
+		}
+		if v := n.Services.CIDRBlocks; len(v) > 0 {
+			fmt.Fprintf(cmd, " --service-cidr=%q", v[0])
+		}
+		if v := n.ServiceDomain; v != "" {
+			fmt.Fprintf(cmd, " --service-dns-domain=%q", v)
+		}
+	}
 
 	stdout := &bytes.Buffer{}
+	fmt.Fprintln(stdout, cmd.String())
 	if err := ssh.Run(
 		ctx, sshClient, nil, stdout, nil, cmd.String()); err != nil {
 		return err
@@ -176,6 +185,9 @@ func (a actuator) apiEnsureInit(ctx *reqctx) error {
 }
 
 func (a actuator) apiEnsureNetwork(ctx *reqctx) error {
+	if len(ctx.cluster.Spec.ClusterNetwork.Pods.CIDRBlocks) > 0 {
+		return nil
+	}
 	log.WithField("vm", ctx.machine.Name).Info("kube-apply-networking")
 	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
 	if err != nil {
