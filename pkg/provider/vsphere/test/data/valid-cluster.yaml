@@ -4,6 +4,8 @@ apiVersion: cluster.k8s.io/v1alpha1
 kind: Cluster
 metadata:
   name: sk8-1234567
+  labels:
+    sk8.vmware.io/config-dir: /Users/akutz/.sk8/sk8-1234567
 spec:
   providerSpec:
     value:

@@ -19,6 +19,7 @@ package cluster
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,11 @@ import (
 	"vmware.io/sk8/pkg/config"
 	"vmware.io/sk8/pkg/config/encoding"
 )
+
+/*var (
+	clusterGVK = capi.SchemeGroupVersion.WithKind("Cluster")
+	machineGVK = capi.SchemeGroupVersion.WithKind("Machine")
+)*/
 
 // Cluster describes the information required to turn up, reconcile, or
 // delete a Kubernetes cluster.
@@ -138,74 +144,131 @@ func (c *Cluster) ApplyDefaultProviderConfigs(rdrs ...io.Reader) error {
 		}
 	}
 
-	// Apply the defaults to the ClusterProviderConfig.
-	if err := c.applyDefaultProviderConfigs(
+	// Apply the defaults to the Cluster.
+	if err := c.applyDefaultClusterConfig(objs...); err != nil {
+		return nil
+	}
+
+	// Apply the defaults to the cluster provider config.
+	if err := c.applyDefaultProviderConfig(
 		c.Cluster.Spec.ProviderSpec.Value, objs...); err != nil {
-		return err
+		return nil
 	}
 
 	// Apply the defaults to all of the MachineProviderConfigs.
 	for i := range c.Machines.Items {
 		m := &c.Machines.Items[i]
-		if err := c.applyDefaultProviderConfigs(
+		if err := c.applyDefaultProviderConfig(
 			m.Spec.ProviderSpec.Value, objs...); err != nil {
-			return err
+			return nil
 		}
 	}
 
 	return nil
 }
 
-func (c *Cluster) applyDefaultProviderConfigs(
-	val *runtime.RawExtension, objs ...runtime.Object) error {
+// buildDefaultConfig merges all of the objs that match the provided gvk.
+func (c *Cluster) buildDefaultConfig(
+	gvk schema.GroupVersionKind,
+	objs ...runtime.Object) (runtime.Object, error) {
 
-	var (
-		// allDefCfg is a combined view of all the default configuration data
-		allDefCfg runtime.Object
-		curCfgGVK = val.Object.GetObjectKind().GroupVersionKind()
-	)
-
-	// First combine all of the apllicable objects into cfgObj.
-	for _, defCfg := range objs {
-		if defCfg.GetObjectKind().GroupVersionKind() == curCfgGVK {
-			if allDefCfg == nil {
-				allDefCfg = defCfg
+	var defaultConfig runtime.Object
+	for _, o := range objs {
+		if gvk == o.GetObjectKind().GroupVersionKind() {
+			if defaultConfig == nil {
+				defaultConfig = o
 			} else {
-				defCfgBuf, err := yaml.Marshal(defCfg)
+				buf, err := MarshalJSONNoEmptyVals(o)
 				if err != nil {
-					return err
+					return nil, err
 				}
-				if err := encoding.DecodeInto(defCfgBuf, allDefCfg); err != nil {
-					return err
+				if err := json.Unmarshal(buf, defaultConfig); err != nil {
+					return nil, err
 				}
 			}
 		}
 	}
+	return defaultConfig, nil
+}
 
-	// Now rebase the existing config data onto the combined, default config.
-	if allDefCfg != nil {
-		// newCfg is just an alias for allDefCfg in order to make the following
-		// logic more self-descriptive
-		newCfg := allDefCfg
+func (c *Cluster) applyDefaultClusterConfig(objs ...runtime.Object) error {
 
-		// Marshal the current provider config.
-		curCfgBuf, err := yaml.Marshal(val.Object)
-		if err != nil {
-			return err
-		}
-
-		// Take the marshaled copy of the current provider config and decode it
-		// into the newCfg object. This is used instead of DeepCopyInto because
-		// the latter method overwrites non-empty fields with empty ones.
-		if err := encoding.DecodeInto(curCfgBuf, newCfg); err != nil {
-			return err
-		}
-
-		// Replace the current config with the new one and ensure the scheme
-		// defaults are set.
-		val.Object = newCfg
-		encoding.Scheme.Default(val.Object)
+	// Get the combined, default configuration for the given obj.
+	gvk := c.Cluster.GroupVersionKind()
+	defaultConfig, err := c.buildDefaultConfig(gvk, objs...)
+	if err != nil {
+		return err
 	}
+	if defaultConfig == nil {
+		return nil
+	}
+
+	// newCfg is just an alias for defaultConfig in order to make the
+	// following logic more self-descriptive
+	newCfg := defaultConfig.(*capi.Cluster)
+
+	// Marshal the current config.
+	curCfgBuf, err := MarshalJSONNoEmptyVals(c.Cluster)
+	if err != nil {
+		return err
+	}
+
+	// Take the marshaled copy of the current config and decode it
+	// into the newCfg object. This is used instead of DeepCopyInto because
+	// the latter method overwrites non-empty fields with empty ones.
+	if err := encoding.DecodeInto(curCfgBuf, newCfg); err != nil {
+		return err
+	}
+
+	// Copy over the existing Cluster object with the new one.
+	newCfg.DeepCopyInto(&c.Cluster)
+
+	// Marshalling a RawExtension to JSON undoes the unmarshalled copy
+	// of the Object, so once again decode the Cluster provider
+	// config into an Object.
+	if _, err := encoding.FromRaw(
+		c.Cluster.Spec.ProviderSpec.Value); err != nil {
+		return errors.Wrap(err, "Cluster")
+	}
+
+	encoding.Scheme.Default(&c.Cluster)
+	return nil
+}
+
+func (c *Cluster) applyDefaultProviderConfig(
+	val *runtime.RawExtension, objs ...runtime.Object) error {
+
+	// Get the combined, default configuration for the given obj.
+	gvk := val.Object.GetObjectKind().GroupVersionKind()
+	defaultConfig, err := c.buildDefaultConfig(gvk, objs...)
+	if err != nil {
+		return err
+	}
+	if defaultConfig == nil {
+		return nil
+	}
+
+	// newCfg is just an alias for defaultConfig in order to make the
+	// following logic more self-descriptive
+	newCfg := defaultConfig
+
+	// Marshal the current provider config.
+	curCfgBuf, err := MarshalJSONNoEmptyVals(val.Object)
+	if err != nil {
+		return err
+	}
+
+	// Take the marshaled copy of the current provider config and decode it
+	// into the newCfg object. This is used instead of DeepCopyInto because
+	// the latter method overwrites non-empty fields with empty ones.
+	if err := encoding.DecodeInto(curCfgBuf, newCfg); err != nil {
+		return err
+	}
+
+	// Replace the current config with the new one and ensure the scheme
+	// defaults are set
+	val.Object = newCfg
+	encoding.Scheme.Default(newCfg)
 
 	return nil
 }

@@ -19,6 +19,7 @@ package test
 import (
 	"net"
 	"os"
+	"path"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,10 +48,14 @@ func NewExpectedClusterProviderConfig() *vconfig.ClusterProviderConfig {
 			},
 		},
 	}
-	if d := os.Getenv("SK8_SSH_DIR"); d != "" {
-		lvsConfig.SSH.PrivateKeyPath = "id_rsa.sk8"
-		lvsConfig.SSH.PublicKeyPath = "id_rsa.sk8.pub"
-	}
+
+	wd, _ := os.Getwd()
+	keyPath := path.Join(wd, "data", "id_rsa.sk8")
+	pubPath := path.Join(wd, "data", "id_rsa.sk8.pub")
+
+	lvsConfig.SSH.PrivateKeyPath = keyPath
+	lvsConfig.SSH.PublicKeyPath = pubPath
+
 	encoding.Scheme.Default(lvsConfig)
 
 	obj := vconfig.ClusterProviderConfig{
@@ -62,10 +67,8 @@ func NewExpectedClusterProviderConfig() *vconfig.ClusterProviderConfig {
 			Object: lvsConfig,
 		},
 	}
-	if d := os.Getenv("SK8_SSH_DIR"); d != "" {
-		obj.SSH.PrivateKeyPath = "id_rsa.sk8"
-		obj.SSH.PublicKeyPath = "id_rsa.sk8.pub"
-	}
+	obj.SSH.PrivateKeyPath = keyPath
+	obj.SSH.PublicKeyPath = pubPath
 	encoding.Scheme.Default(&obj)
 	return &obj
 }

@@ -28,7 +28,6 @@ require (
 	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/cobra v0.0.3
 	github.com/vmware/govmomi v0.20.1-0.20190329012354-d3ffbeb9b353
-	github.com/vmware/vmw-guestinfo v0.0.0-20170707015358-25eff159a728
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1 // indirect

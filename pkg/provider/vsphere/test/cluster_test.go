@@ -131,6 +131,12 @@ func TestReadFromFile(t *testing.T) {
 				// some of its settings.
 				expObj2 := expObj.DeepCopy()
 
+				expObj2.Cluster.Labels[config.CloudProviderLabelName] = "external"
+				expObj2.Cluster.Spec.ClusterNetwork.ServiceDomain = "cluster.local"
+				expObj2.Cluster.Spec.ClusterNetwork.Services.CIDRBlocks = append(
+					expObj2.Cluster.Spec.ClusterNetwork.Services.CIDRBlocks,
+					"10.96.0.0/12")
+
 				// Update the expObj2's ClusterProviderConfig.
 				clusterProviderConfig := expObj2.Cluster.Spec.ProviderSpec.Value.Object.(*vconfig.ClusterProviderConfig)
 				lvsConfig := clusterProviderConfig.NAT.Object.(*config.LinuxVirtualSwitchConfig)

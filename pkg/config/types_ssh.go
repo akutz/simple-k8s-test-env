@@ -17,16 +17,8 @@ limitations under the License.
 package config
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"io/ioutil"
-	"os"
-	"path"
 
-	"github.com/pkg/errors"
-	"golang.org/x/crypto/ssh"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -84,24 +76,11 @@ func SetDefaults_SSHCredential(obj *SSHCredential) {
 	if obj.Username == "" {
 		obj.Username = "sk8"
 	}
-	if len(obj.PrivateKey) == 0 && len(obj.PublicKey) == 0 {
-		if obj.PrivateKeyPath != "" && obj.PublicKeyPath != "" {
-			if d := os.Getenv("SK8_SSH_DIR"); d != "" {
-				obj.PrivateKeyPath = path.Join(d, obj.PrivateKeyPath)
-				obj.PublicKeyPath = path.Join(d, obj.PublicKeyPath)
-			}
-			if len(obj.PrivateKey) == 0 {
-				obj.PrivateKey, _ = ioutil.ReadFile(obj.PrivateKeyPath)
-				obj.PublicKey, _ = ioutil.ReadFile(obj.PublicKeyPath)
-			}
-		} else {
-			prv, pub, err := sshKeyGen()
-			if err != nil {
-				panic(err)
-			}
-			obj.PrivateKey = prv
-			obj.PublicKey = pub
-		}
+	if len(obj.PrivateKey) == 0 && obj.PrivateKeyPath != "" {
+		obj.PrivateKey, _ = ioutil.ReadFile(obj.PrivateKeyPath)
+	}
+	if len(obj.PublicKey) == 0 && obj.PublicKeyPath != "" {
+		obj.PublicKey, _ = ioutil.ReadFile(obj.PublicKeyPath)
 	}
 }
 
@@ -148,31 +127,4 @@ func SetDefaults_SSHEndpoint(obj *SSHEndpoint) {
 // String returns the textual representation of an SSHEndpoint.
 func (s SSHEndpoint) String() string {
 	return s.ServiceEndpoint.String()
-}
-
-func sshKeyGen() ([]byte, []byte, error) {
-	// Generate the SSH private key.
-	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "rsa.GenerateKey failed")
-	}
-	if err := privKey.Validate(); err != nil {
-		return nil, nil, errors.Wrap(err, "privKey.Validate failed")
-	}
-	privDER := x509.MarshalPKCS1PrivateKey(privKey)
-	privBlock := pem.Block{
-		Type:    "RSA PRIVATE KEY",
-		Headers: nil,
-		Bytes:   privDER,
-	}
-	privKeyBuf := pem.EncodeToMemory(&privBlock)
-
-	// Generate the SSH public key.
-	pubKey, err := ssh.NewPublicKey(&privKey.PublicKey)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "ssh.NewPublicKey failed")
-	}
-	pubKeyBuf := ssh.MarshalAuthorizedKey(pubKey)
-
-	return privKeyBuf, pubKeyBuf, nil
 }

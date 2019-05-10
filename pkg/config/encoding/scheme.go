@@ -57,50 +57,6 @@ func AddToScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(vsphere_v1alpha0.AddToScheme(scheme))
 }
 
-// ApplyDefaultsToProviderConfigs updates a Cluster's ClusterProviderConfig
-// object and all of the MachineProviderConfig objects using a
-// ClusterProviderConfig and MachineProviderConfig as objects with default
-// values.
-func ApplyDefaultsToProviderConfigs(
-	cluster *capi.Cluster,
-	machines *capi.MachineList,
-	defaultClusterProviderConfig runtime.Object,
-	defaultMachineProviderConfig runtime.Object) error {
-
-	newClusterConfig := defaultClusterProviderConfig.DeepCopyObject()
-	newMachineConfig := defaultMachineProviderConfig.DeepCopyObject()
-
-	// Merge the existing ClusterProviderConfig with the new one.
-	if oldCfg := cluster.Spec.ProviderSpec.Value.Object; oldCfg == nil {
-		cluster.Spec.ProviderSpec.Value.Object = newClusterConfig
-	} else {
-		newCfg := newClusterConfig
-		oldBuf, _ := yaml.Marshal(oldCfg)
-		if _, _, err := Decoder.Decode(oldBuf, nil, newCfg); err != nil {
-			return err
-		}
-		cluster.Spec.ProviderSpec.Value.Object = newCfg
-	}
-
-	// Merge the existing MachineProviderConfigs with the new one.
-	for i := range machines.Items {
-		machine := &machines.Items[i]
-		newCfg := newMachineConfig.DeepCopyObject()
-
-		if oldCfg := machine.Spec.ProviderSpec.Value.Object; oldCfg == nil {
-			machine.Spec.ProviderSpec.Value.Object = newCfg
-		} else {
-			oldBuf, _ := yaml.Marshal(oldCfg)
-			if _, _, err := Decoder.Decode(oldBuf, nil, newCfg); err != nil {
-				return err
-			}
-			machine.Spec.ProviderSpec.Value.Object = newCfg
-		}
-	}
-
-	return nil
-}
-
 // Decode returns a new API object unmarshalled from the given data.
 func Decode(data []byte) (runtime.Object, error) {
 	var typeMeta runtime.TypeMeta

@@ -21,8 +21,10 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -54,8 +56,10 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
-			if err := a.apiEnsureNetwork(ctx); err != nil {
-				return err
+			if ok, _ := strconv.ParseBool(os.Getenv("KUBE_NETWORK_DISABLED")); !ok {
+				if err := a.apiEnsureNetwork(ctx); err != nil {
+					return err
+				}
 			}
 			if err := a.apiEnsureLocalConf(ctx); err != nil {
 				return err
