@@ -29,6 +29,9 @@ import (
 func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&AWSLoadBalancerConfig{}, func(obj interface{}) { SetObjectDefaults_AWSLoadBalancerConfig(obj.(*AWSLoadBalancerConfig)) })
 	scheme.AddTypeDefaultingFunc(&ClusterProviderConfig{}, func(obj interface{}) { SetObjectDefaults_ClusterProviderConfig(obj.(*ClusterProviderConfig)) })
+	scheme.AddTypeDefaultingFunc(&ExternalCloudProviderConfig{}, func(obj interface{}) {
+		SetObjectDefaults_ExternalCloudProviderConfig(obj.(*ExternalCloudProviderConfig))
+	})
 	scheme.AddTypeDefaultingFunc(&MachineProviderConfig{}, func(obj interface{}) { SetObjectDefaults_MachineProviderConfig(obj.(*MachineProviderConfig)) })
 	return nil
 }
@@ -40,6 +43,11 @@ func SetObjectDefaults_AWSLoadBalancerConfig(in *AWSLoadBalancerConfig) {
 func SetObjectDefaults_ClusterProviderConfig(in *ClusterProviderConfig) {
 	SetDefaults_ClusterProviderConfig(in)
 	SetDefaults_ImportOVAConfig(&in.OVA)
+}
+
+func SetObjectDefaults_ExternalCloudProviderConfig(in *ExternalCloudProviderConfig) {
+	SetDefaults_ExternalCloudProviderConfig(in)
+	SetDefaults_ExternalCloudProviderTemplates(&in.Templates)
 }
 
 func SetObjectDefaults_MachineProviderConfig(in *MachineProviderConfig) {

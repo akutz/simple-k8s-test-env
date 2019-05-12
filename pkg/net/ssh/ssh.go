@@ -177,24 +177,34 @@ func Run(
 	stdout2 := &bytes.Buffer{}
 	stderr2 := &bytes.Buffer{}
 
-	sess.Stdin = stdin
-	sess.Stdout = stdout2
-	sess.Stderr = stderr2
+	stdoutPipes := []io.Writer{stdout2}
+	stderrPipes := []io.Writer{stderr2}
 
 	if stdout != nil {
-		sess.Stdout = io.MultiWriter(stdout, stdout2)
+		stdoutPipes = append(stdoutPipes, stdout)
 	}
 	if stderr != nil {
-		sess.Stdout = io.MultiWriter(stderr, stderr2)
+		stderrPipes = append(stderrPipes, stderr)
 	}
+
+	if log.GetLevel() == log.DebugLevel {
+		stdoutPipes = append(stdoutPipes, os.Stdout)
+		stderrPipes = append(stderrPipes, os.Stderr)
+	}
+
+	sess.Stdin = stdin
+	sess.Stdout = io.MultiWriter(stdoutPipes...)
+	sess.Stderr = io.MultiWriter(stderrPipes...)
 
 	log.WithFields(log.Fields{
 		"addr": client.addr,
 		"cmd":  cmd,
 	}).Debug("ssh-run")
 	if err := sess.Run(cmd); err != nil {
-		io.Copy(os.Stdout, stdout2)
-		io.Copy(os.Stderr, stderr2)
+		if log.GetLevel() != log.DebugLevel {
+			io.Copy(os.Stdout, stdout2)
+			io.Copy(os.Stderr, stderr2)
+		}
 		return errors.Wrapf(
 			err, "failed to ssh-run %q on %s", cmd, client.addr)
 	}

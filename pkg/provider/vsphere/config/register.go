@@ -49,6 +49,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&ClusterProviderConfig{},
 		&MachineProviderConfig{},
+		&ClusterStatus{},
+		&AWSLoadBalancerConfig{},
+		&ExternalCloudProviderConfig{},
 	)
 	return nil
 }

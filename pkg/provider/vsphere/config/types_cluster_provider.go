@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
@@ -52,6 +53,10 @@ type ClusterProviderConfig struct {
 	// +optional
 	Password string `json:"password,omitempty"`
 
+	// Insecure is a flag that controls whether or not to validate the
+	// vSphere server's certificate.
+	Insecure bool `json:"insecure,omitempty"`
+
 	// NAT is the configuration for the service that enables external access to
 	// machines deployed to a private network. The currently supported types
 	// are:
@@ -60,6 +65,11 @@ type ClusterProviderConfig struct {
 	// +optional
 	NAT *runtime.RawExtension `json:"nat,omitempty"`
 
+	// Net contains the network manifest(s) applied to the cluster.
+	//
+	// Defaults to a WeaveWorks network.
+	Net string `json:"net,omitempty"`
+
 	// OVA describes the OVA used to deploy machines and whether to import
 	// it as a content library item or template.
 	OVA ImportOVAConfig `json:"ova"`
@@ -67,6 +77,12 @@ type ClusterProviderConfig struct {
 	// SSH defines the SSH user and private key used to access the cluster's
 	// machines.
 	SSH config.SSHCredential `json:"ssh"`
+
+	// CloudProvider is the configuration for the cloud provider. The
+	// currently supported types are:
+	//   * vsphere.sk8.vmware.io/ExternalCloudProviderConfig
+	//   * vsphere.sk8.vmware.io/InternalCloudProviderConfig
+	CloudProvider *runtime.RawExtension `json:"cloudProvider,omitempty"`
 }
 
 // UnmarshalJSON ensures that the object's NAT field is unmarshaled at
@@ -77,22 +93,68 @@ func (c *ClusterProviderConfig) UnmarshalJSON(data []byte) error {
 	// unmarshaled. The struct is initialized with the data from the
 	// parent ClusterProviderConfig.
 	var obj = struct {
-		Server   string                `json:"server,omitempty"`
-		Username string                `json:"username,omitempty"`
-		Password string                `json:"password,omitempty"`
-		NAT      *runtime.RawExtension `json:"nat,omitempty"`
-		OVA      ImportOVAConfig       `json:"ova,omitempty"`
-		SSH      config.SSHCredential  `json:"ssh,omitempty"`
+		Server        string                `json:"server,omitempty"`
+		Username      string                `json:"username,omitempty"`
+		Password      string                `json:"password,omitempty"`
+		CloudProvider *runtime.RawExtension `json:"cloudProvider,omitempty"`
+		NAT           *runtime.RawExtension `json:"nat,omitempty"`
+		Net           string                `json:"net,omitempty"`
+		OVA           ImportOVAConfig       `json:"ova,omitempty"`
+		SSH           config.SSHCredential  `json:"ssh,omitempty"`
 	}{
 		Server:   c.Server,
 		Username: c.Username,
 		Password: c.Password,
+		Net:      c.Net,
 	}
 	c.OVA.DeepCopyInto(&obj.OVA)
 	c.SSH.DeepCopyInto(&obj.SSH)
 
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return err
+	}
+
+	// If there is new CloudProvider data then it needs to be unmarshaled into
+	// either the config's existing CloudProvider object or a new object.
+	if obj.CloudProvider != nil && len(obj.CloudProvider.Raw) > 0 {
+		log.Debug("is ccm data")
+		var cfg runtime.Object
+
+		// Does the ClusterProviderConfig already have a CloudProvider field that
+		// contains a valid Object? If so, re-use it as the target of
+		// the unmarshal.
+		//
+		// Otherwise the data is unmarshaled in order to determine what
+		// kind of CloudProvider implementation to create.
+		if c.CloudProvider != nil && c.CloudProvider.Object != nil {
+			log.Debug("re-use ccm object")
+			// Re-use the existing CloudProvider object.
+			cfg = c.CloudProvider.Object
+		} else {
+			log.Debug("create ccm object")
+			// Inspect the data to determine the type CloudProvider object to
+			// create.
+			var typeMeta runtime.TypeMeta
+			if err := yaml.Unmarshal(obj.CloudProvider.Raw, &typeMeta); err != nil {
+				return err
+			}
+			log.WithField("typeMeta", typeMeta).Debug("discovered api object")
+			switch typeMeta.GroupVersionKind().Kind {
+			case "ExternalCloudProviderConfig":
+				cfg = &ExternalCloudProviderConfig{}
+			}
+		}
+
+		// If the CloudProvider config is not nil, then the given CloudProvider
+		// data should be unmarshaled into the object.
+		if cfg != nil {
+			log.Debug("unmarshal raw api object into external cloud provider")
+			if err := yaml.Unmarshal(obj.CloudProvider.Raw, cfg); err != nil {
+				return err
+			}
+			obj.CloudProvider.Raw = nil
+			obj.CloudProvider.Object = cfg
+		}
 	}
 
 	// If there is new NAT data then it needs to be unmarshaled into either
@@ -139,9 +201,13 @@ func (c *ClusterProviderConfig) UnmarshalJSON(data []byte) error {
 	c.Server = obj.Server
 	c.Username = obj.Username
 	c.Password = obj.Password
+	if obj.CloudProvider != nil {
+		c.CloudProvider = obj.CloudProvider
+	}
 	if obj.NAT != nil {
 		c.NAT = obj.NAT
 	}
+	c.Net = obj.Net
 	obj.OVA.DeepCopyInto(&c.OVA)
 	obj.SSH.DeepCopyInto(&c.SSH)
 
@@ -173,12 +239,36 @@ func SetDefaults_ClusterProviderConfig(obj *ClusterProviderConfig) {
 	}
 
 	config.SetDefaults_SSHCredential(&obj.SSH)
+
+	if obj.CloudProvider != nil {
+		switch cfg := obj.CloudProvider.Object.(type) {
+		case *ExternalCloudProviderConfig:
+			if cfg.ServerAddr == "" {
+				cfg.ServerAddr = obj.Server
+			}
+			if cfg.ServerPort == 0 {
+				cfg.ServerPort = 443
+			}
+			if cfg.Username == "" {
+				cfg.Username = obj.Username
+			}
+			if cfg.Password == "" {
+				cfg.Password = obj.Password
+			}
+			SetObjectDefaults_ExternalCloudProviderConfig(cfg)
+		}
+	}
+
 	if obj.NAT != nil {
 		switch cfg := obj.NAT.Object.(type) {
 		case *config.LinuxVirtualSwitchConfig:
 			config.SetObjectDefaults_LinuxVirtualSwitchConfig(cfg)
 		case *AWSLoadBalancerConfig:
-			SetDefaults_AWSLoadBalancerConfig(cfg)
+			SetObjectDefaults_AWSLoadBalancerConfig(cfg)
 		}
+	}
+
+	if obj.Net == "" {
+		obj.Net = weaveWorksFormat
 	}
 }

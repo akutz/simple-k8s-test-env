@@ -54,10 +54,13 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
+			if err := a.apiEnsureKubeConf(ctx); err != nil {
+				return err
+			}
 			if err := a.apiEnsureNetwork(ctx); err != nil {
 				return err
 			}
-			if err := a.apiEnsureLocalConf(ctx); err != nil {
+			if err := a.ccmEnsure(ctx); err != nil {
 				return err
 			}
 			status.End(ctx, true)
@@ -189,6 +192,7 @@ func (a actuator) apiEnsureNetwork(ctx *reqctx) error {
 		return nil
 	}
 	log.WithField("vm", ctx.machine.Name).Info("kube-apply-networking")
+
 	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
 	if err != nil {
 		return err
@@ -196,12 +200,12 @@ func (a actuator) apiEnsureNetwork(ctx *reqctx) error {
 	defer sshClient.Close()
 	return ssh.Run(
 		ctx, sshClient,
-		strings.NewReader(weaveWorksYAML),
+		strings.NewReader(ctx.ccfg.Net),
 		nil, nil,
-		"sudo kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f -")
+		sudoKubectlApplyStdin)
 }
 
-func (a actuator) apiEnsureLocalConf(ctx *reqctx) error {
+func (a actuator) apiEnsureKubeConf(ctx *reqctx) error {
 	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
 	if configDir == "" {
 		return nil
@@ -222,7 +226,7 @@ func (a actuator) apiEnsureLocalConf(ctx *reqctx) error {
 
 	buf, err := ioutil.ReadAll(stdout)
 	if err != nil {
-		return errors.Wrap(err, "error reading remote kubeconfig")
+		return errors.Wrap(err, "error reading remote kubeConfig")
 	}
 
 	// Replace the server URL with the external IP.
@@ -230,10 +234,10 @@ func (a actuator) apiEnsureLocalConf(ctx *reqctx) error {
 	newAPIServer := []byte(fmt.Sprintf("server: https://%s:%d",
 		ctx.cluster.Status.APIEndpoints[0].Host,
 		ctx.cluster.Status.APIEndpoints[0].Port))
-	kubeconfig := re.ReplaceAllLiteral(buf, newAPIServer)
-	kubeconfigPath := path.Join(configDir, "kube.conf")
-	if err := ioutil.WriteFile(kubeconfigPath, kubeconfig, 0640); err != nil {
-		return errors.Wrapf(err, "error writing kubeconfig %q", kubeconfigPath)
+	kubeConfig := re.ReplaceAllLiteral(buf, newAPIServer)
+	kubeConfigPath := path.Join(configDir, "kube.conf")
+	if err := ioutil.WriteFile(kubeConfigPath, kubeConfig, 0640); err != nil {
+		return errors.Wrapf(err, "error writing kubeConfig %q", kubeConfigPath)
 	}
 
 	return nil

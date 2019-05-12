@@ -14,6 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package machine
+package config_test
 
-const sudoKubectlApplyStdin = "sudo kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f -"
+import (
+	"testing"
+
+	"sigs.k8s.io/yaml"
+
+	vconfig "vmware.io/sk8/pkg/provider/vsphere/config"
+)
+
+func TestExternalCloudProviderConfig(t *testing.T) {
+	cfg := &vconfig.ExternalCloudProviderConfig{}
+	vconfig.SetObjectDefaults_ExternalCloudProviderConfig(cfg)
+	buf, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(string(buf))
+}
