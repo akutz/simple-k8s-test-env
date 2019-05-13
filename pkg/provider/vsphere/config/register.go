@@ -52,6 +52,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterStatus{},
 		&AWSLoadBalancerConfig{},
 		&ExternalCloudProviderConfig{},
+		&InternalCloudProviderConfig{},
 	)
 	return nil
 }

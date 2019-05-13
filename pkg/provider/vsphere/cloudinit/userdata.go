@@ -173,7 +173,7 @@ write_files:
   content: |
     # Note: This dropin only works with kubeadm and kubelet v1.11+
     [Service]
-    Environment="KUBELET_KUBECONFIG_ARGS={{if .CloudProvider}}--cloud-provider={{.CloudProvider}} {{end}}--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+    Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf{{if .CloudProvider}} --cloud-provider={{.CloudProvider}}{{if ne .CloudProvider "external"}} --cloud-config /etc/kubernetes/cloud.conf{{end}}{{end}}"
     Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"
     # This is a file that "kubeadm init" and "kubeadm join" generates at runtime, populating the KUBELET_KUBEADM_ARGS variable dynamically
     EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env

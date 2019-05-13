@@ -19,11 +19,13 @@ package machine
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"path"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +33,7 @@ import (
 	"vmware.io/sk8/pkg/config"
 	"vmware.io/sk8/pkg/net/lvs"
 	"vmware.io/sk8/pkg/net/ssh"
+	vconfig "vmware.io/sk8/pkg/provider/vsphere/config"
 	"vmware.io/sk8/pkg/status"
 )
 
@@ -51,6 +54,9 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 		case <-ctx.csta.ControlPlaneCanOwn:
 			defer status.End(ctx, false)
 			status.Start(ctx, "Configuring control plane 👀")
+			if err := a.nodeEnsureCloudProvider(ctx); err != nil {
+				return err
+			}
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
@@ -60,7 +66,7 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 			if err := a.apiEnsureNetwork(ctx); err != nil {
 				return err
 			}
-			if err := a.ccmEnsure(ctx); err != nil {
+			if err := a.apiEnsureCloudProvider(ctx); err != nil {
 				return err
 			}
 			status.End(ctx, true)
@@ -128,7 +134,8 @@ func (a actuator) apiEnsureInit(ctx *reqctx) error {
 	cmd := &bytes.Buffer{}
 	fmt.Fprintf(
 		cmd,
-		"sudo kubeadm init --apiserver-bind-port=443"+
+		"sudo sh -c '[ -e /etc/kubernetes/admin.conf ]' || "+
+			"sudo kubeadm init --apiserver-bind-port=443"+
 			" --kubernetes-version=%q",
 		ctx.machine.Spec.Versions.ControlPlane)
 
@@ -241,4 +248,168 @@ func (a actuator) apiEnsureKubeConf(ctx *reqctx) error {
 	}
 
 	return nil
+}
+
+func (a actuator) apiEnsureCloudProvider(ctx *reqctx) error {
+	cloudProvider := ctx.cluster.Labels[config.CloudProviderLabelName]
+	switch ccm := ctx.ccfg.CloudProvider.Object.(type) {
+	case *vconfig.ExternalCloudProviderConfig:
+		if cloudProvider == "external" {
+			return a.apiEnsureExternalCloudProvider(ctx, ccm)
+		}
+	case *vconfig.InternalCloudProviderConfig:
+		if cloudProvider == "vsphere" {
+			return a.apiEnsureInternalCloudProvider(ctx, ccm)
+		}
+	}
+	return nil
+}
+
+func (a actuator) apiEnsureExternalCloudProvider(
+	ctx *reqctx,
+	ccm *vconfig.ExternalCloudProviderConfig) error {
+
+	log.WithField("vm", ctx.machine.Name).Info("kube-apply-external-ccm")
+
+	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
+	if configDir == "" {
+		return nil
+	}
+
+	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
+	if err != nil {
+		return err
+	}
+	defer sshClient.Close()
+
+	fmap := template.FuncMap{
+		"join": strings.Join,
+		"base64": func(plain string) string {
+			return base64.StdEncoding.EncodeToString([]byte(plain))
+		},
+	}
+
+	kubeApply := func(format, objectName string) error {
+		tpl, err := template.New("t").Funcs(fmap).Parse(format)
+		if err != nil {
+			return err
+		}
+		buf := &bytes.Buffer{}
+		if err := tpl.Execute(buf, ccm); err != nil {
+			return err
+		}
+
+		yamlFile := path.Join(
+			configDir,
+			fmt.Sprintf("ext-ccm-%s.yaml", objectName))
+		if err := ioutil.WriteFile(yamlFile, buf.Bytes(), 0640); err != nil {
+			return err
+		}
+
+		if err := ssh.Run(
+			ctx,
+			sshClient,
+			buf,
+			nil,
+			nil,
+			sudoKubectlApplyStdin); err != nil {
+			return errors.Wrapf(err, "error creating %s", objectName)
+		}
+
+		return nil
+	}
+
+	// 1. Create the ConfigMap
+	if err := kubeApply(ccm.Templates.Config, "ConfigMap"); err != nil {
+		return err
+	}
+	// 2. Create the ServiceAccount
+	if err := kubeApply(ccm.Templates.ServiceAccount, "ServiceAccount"); err != nil {
+		return err
+	}
+	// 3. Create the Roles
+	if err := kubeApply(ccm.Templates.Roles, "Roles"); err != nil {
+		return err
+	}
+	// 4. Create the RoleBindings
+	if err := kubeApply(ccm.Templates.RoleBindings, "RoleBindings"); err != nil {
+		return err
+	}
+	// 5. Create the Secrets
+	if err := kubeApply(ccm.Templates.Secrets, "Secrets"); err != nil {
+		return err
+	}
+	// 6. Create the Service
+	if err := kubeApply(ccm.Templates.Service, "Service"); err != nil {
+		return err
+	}
+	// 7. Create the Deployment
+	if err := kubeApply(ccm.Templates.Deployment, "Deployment"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a actuator) apiEnsureInternalCloudProvider(
+	ctx *reqctx,
+	ccm *vconfig.InternalCloudProviderConfig) error {
+
+	log.WithField("vm", ctx.machine.Name).Info("kube-apply-internal-ccm")
+
+	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
+	if configDir == "" {
+		return nil
+	}
+
+	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
+	if err != nil {
+		return err
+	}
+	defer sshClient.Close()
+
+	fmap := template.FuncMap{
+		"join": strings.Join,
+		"base64": func(plain string) string {
+			return base64.StdEncoding.EncodeToString([]byte(plain))
+		},
+	}
+
+	kubeApply := func(format, objectName string) error {
+		tpl, err := template.New("t").Funcs(fmap).Parse(format)
+		if err != nil {
+			return err
+		}
+		buf := &bytes.Buffer{}
+		if err := tpl.Execute(buf, ccm); err != nil {
+			return err
+		}
+
+		yamlFile := path.Join(
+			configDir,
+			fmt.Sprintf("int-ccm-%s.yaml", objectName))
+		if err := ioutil.WriteFile(yamlFile, buf.Bytes(), 0640); err != nil {
+			return err
+		}
+
+		if err := ssh.Run(
+			ctx,
+			sshClient,
+			buf,
+			nil,
+			nil,
+			sudoKubectlApplyStdin); err != nil {
+			return errors.Wrapf(err, "error creating %s", objectName)
+		}
+
+		return nil
+	}
+
+	// 1. Create the Secrets
+	if err := kubeApply(ccm.Templates.Secrets, "Secrets"); err != nil {
+		return err
+	}
+
+	// Ensure the "cloud.conf" file is uploaded prior to the kubelet starting.
+	return a.nodeEnsureInternalCloudProvider(ctx, ccm)
 }

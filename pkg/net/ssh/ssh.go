@@ -212,6 +212,39 @@ func Run(
 	return nil
 }
 
+// Exists checks to see if the provided path exists.
+func Exists(
+	ctx context.Context,
+	client *Client,
+	path, operator string) error {
+
+	// Check to see if the path exists.
+	if err := Run(ctx, client, nil, nil, nil,
+		"sudo sh -c '[ -%s %q ]'", operator, path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// FileExists checks to see if a file exists at the provided path.
+func FileExists(
+	ctx context.Context,
+	client *Client,
+	path string) error {
+
+	return Exists(ctx, client, path, "f")
+}
+
+// DirExists checks to see if a directory exists at the provided path.
+func DirExists(
+	ctx context.Context,
+	client *Client,
+	path string) error {
+
+	return Exists(ctx, client, path, "d")
+}
+
 // MkdirAll creates all parts of a directory path on the remote host.
 func MkdirAll(
 	ctx context.Context,
@@ -221,14 +254,14 @@ func MkdirAll(
 
 	// Ensure the destination directory exists.
 	if err := Run(ctx, client, nil, nil, nil,
-		"mkdir -p %q", dst); err != nil {
+		"sudo mkdir -p %q", dst); err != nil {
 		return err
 	}
 
 	// Set the directory's owner and group.
 	if owner != "" || group != "" {
 		if err := Run(ctx, client, nil, nil, nil,
-			"chown %s:%s %q", owner, group, dst); err != nil {
+			"sudo chown %s:%s %q", owner, group, dst); err != nil {
 			return err
 		}
 	}
@@ -239,7 +272,7 @@ func MkdirAll(
 	}
 	if mode != 0755 {
 		if err := Run(ctx, client, nil, nil, nil,
-			"chmod %o %q", mode, dst); err != nil {
+			"sudo chmod %o %q", mode, dst); err != nil {
 			return err
 		}
 	}
@@ -286,7 +319,7 @@ func Upload(
 
 	go func() {
 		defer close(errs)
-		errs <- Run(ctx, client, pr, nil, nil, "tar -C %q -x", dirName)
+		errs <- Run(ctx, client, pr, nil, nil, "sudo tar -C %q -x", dirName)
 	}()
 
 	return <-errs

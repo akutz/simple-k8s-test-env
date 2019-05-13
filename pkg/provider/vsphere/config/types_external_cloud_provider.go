@@ -47,16 +47,15 @@ type ExternalCloudProviderConfig struct {
 	// ConfigMapName is the name of the config map that contains the cloud
 	// provider configuration.
 	//
-	// Defaults to "vsphere.conf"
+	// Defaults to "cloud.conf"
 	// +optional
 	ConfigFileName string `json:"configFileName,omitempty"`
 
-	// Datacenters is a list of datacenters where Kubenertes machines
-	// may be created.
+	// Datacenter is the datacenter where Kubernetes machines are created.
 	//
 	// An object missing this field at runtime is invalid.
 	// +optional
-	Datacenters []string `json:"datacenters,omitempty"`
+	Datacenter string `json:"datacenter,omitempty"`
 
 	// Image is the cloud provider image to deploy.
 	//
@@ -140,7 +139,7 @@ func SetDefaults_ExternalCloudProviderConfig(obj *ExternalCloudProviderConfig) {
 		obj.ConfigMapName = "cloud-config-volume"
 	}
 	if obj.ConfigFileName == "" {
-		obj.ConfigFileName = "vsphere.conf"
+		obj.ConfigFileName = "cloud.conf"
 	}
 	if obj.Image == "" {
 		obj.Image = extCCMDefaultImage

@@ -32,6 +32,9 @@ func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&ExternalCloudProviderConfig{}, func(obj interface{}) {
 		SetObjectDefaults_ExternalCloudProviderConfig(obj.(*ExternalCloudProviderConfig))
 	})
+	scheme.AddTypeDefaultingFunc(&InternalCloudProviderConfig{}, func(obj interface{}) {
+		SetObjectDefaults_InternalCloudProviderConfig(obj.(*InternalCloudProviderConfig))
+	})
 	scheme.AddTypeDefaultingFunc(&MachineProviderConfig{}, func(obj interface{}) { SetObjectDefaults_MachineProviderConfig(obj.(*MachineProviderConfig)) })
 	return nil
 }
@@ -48,6 +51,11 @@ func SetObjectDefaults_ClusterProviderConfig(in *ClusterProviderConfig) {
 func SetObjectDefaults_ExternalCloudProviderConfig(in *ExternalCloudProviderConfig) {
 	SetDefaults_ExternalCloudProviderConfig(in)
 	SetDefaults_ExternalCloudProviderTemplates(&in.Templates)
+}
+
+func SetObjectDefaults_InternalCloudProviderConfig(in *InternalCloudProviderConfig) {
+	SetDefaults_InternalCloudProviderConfig(in)
+	SetDefaults_InternalCloudProviderTemplates(&in.Templates)
 }
 
 func SetObjectDefaults_MachineProviderConfig(in *MachineProviderConfig) {

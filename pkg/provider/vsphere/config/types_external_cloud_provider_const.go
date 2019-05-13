@@ -40,9 +40,9 @@ data:
     secret-namespace = "{{.Namespace}}"
     service-account =  "{{.ServiceAccount}}"
 
-    port =             "{{.ServerPort}}"
-    insecure-flag =    "{{.Insecure}}"
-    datacenters =      "{{join .Datacenters ","}}"
+    port =             {{.ServerPort}}
+    insecure-flag =    {{.Insecure}}
+    datacenters =      "{{.Datacenter}}"
 
     [VirtualCenter "{{.ServerAddr}}"]{{if .Region}}{{if .Zone}}
 

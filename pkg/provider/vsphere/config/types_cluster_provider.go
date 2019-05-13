@@ -142,13 +142,15 @@ func (c *ClusterProviderConfig) UnmarshalJSON(data []byte) error {
 			switch typeMeta.GroupVersionKind().Kind {
 			case "ExternalCloudProviderConfig":
 				cfg = &ExternalCloudProviderConfig{}
+			case "InternalCloudProviderConfig":
+				cfg = &InternalCloudProviderConfig{}
 			}
 		}
 
 		// If the CloudProvider config is not nil, then the given CloudProvider
 		// data should be unmarshaled into the object.
 		if cfg != nil {
-			log.Debug("unmarshal raw api object into external cloud provider")
+			log.Debug("unmarshal raw api object into cloud provider")
 			if err := yaml.Unmarshal(obj.CloudProvider.Raw, cfg); err != nil {
 				return err
 			}
@@ -256,6 +258,20 @@ func SetDefaults_ClusterProviderConfig(obj *ClusterProviderConfig) {
 				cfg.Password = obj.Password
 			}
 			SetObjectDefaults_ExternalCloudProviderConfig(cfg)
+		case *InternalCloudProviderConfig:
+			if cfg.ServerAddr == "" {
+				cfg.ServerAddr = obj.Server
+			}
+			if cfg.ServerPort == 0 {
+				cfg.ServerPort = 443
+			}
+			if cfg.Username == "" {
+				cfg.Username = obj.Username
+			}
+			if cfg.Password == "" {
+				cfg.Password = obj.Password
+			}
+			SetObjectDefaults_InternalCloudProviderConfig(cfg)
 		}
 	}
 

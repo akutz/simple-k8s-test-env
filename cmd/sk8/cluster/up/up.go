@@ -35,12 +35,11 @@ var (
 )
 
 type flagVals struct {
-	dryRun        bool
-	roles         []string
-	timeout       time.Duration
-	format        string
-	buildID       string
-	cloudProvider string
+	dryRun  bool
+	roles   []string
+	timeout time.Duration
+	format  string
+	buildID string
 }
 
 // NewCommand returns a new cobra.Command for cluster creation
@@ -60,10 +59,6 @@ func NewCommand() *cobra.Command {
 		&flags.buildID, "build-id", "b",
 		"release/stable",
 		"the Kubernetes build ID to deploy: release/*, ci/*, semver")
-	cmd.Flags().StringVar(
-		&flags.cloudProvider, "cloud-provider",
-		"",
-		"the name of a cloud provider; ex. aws, vsphere, external, etc.")
 	cmd.Flags().BoolVar(
 		&flags.dryRun, "dry-run", false,
 		"specify this flag to emit the calculated cluster manifest without "+
@@ -119,7 +114,6 @@ func runE(flags flagVals, cmd *cobra.Command, args []string) error {
 		if _, err := cluster.WithStdDefaults(clu2); err != nil {
 			return err
 		}
-		clu2.WithCloudProvider(flags.cloudProvider)
 		clu = clu2
 	}
 
