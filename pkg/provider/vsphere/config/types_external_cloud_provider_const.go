@@ -40,15 +40,15 @@ data:
     secret-namespace = "{{.Namespace}}"
     service-account =  "{{.ServiceAccount}}"
 
-    port =             {{.ServerPort}}
-    insecure-flag =    {{.Insecure}}
+    port =             "{{.ServerPort}}"
+    insecure-flag =    "{{.Insecure}}"
     datacenters =      "{{.Datacenter}}"
 
     [VirtualCenter "{{.ServerAddr}}"]{{if .Region}}{{if .Zone}}
 
     [Labels]
-      region = "{{.Region}}"
-      zone =   "{{.Zone}}"{{end}}{{end}}
+    region = "{{.Region}}"
+    zone =   "{{.Zone}}"{{end}}{{end}}
 `
 
 const extCCMDeployPodFormat = `apiVersion: v1

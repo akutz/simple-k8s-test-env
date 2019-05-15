@@ -21,7 +21,6 @@ import (
 	aws_elb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 
 	"vmware.io/sk8/pkg/config"
 	"vmware.io/sk8/pkg/net/lvs"
@@ -68,12 +67,8 @@ func (a actuator) natEnsureLVS(
 
 	// Get the LVS target interface for this machine.
 	lvsTgt := config.ServiceEndpoint{
+		Addr: ctx.msta.IPAddr,
 		Port: 22,
-	}
-	for _, addr := range ctx.machine.Status.Addresses {
-		if addr.Type == lvs.NodeIP {
-			lvsTgt.Addr = addr.Address
-		}
 	}
 	if lvsTgt.Addr == "" {
 		return errors.Errorf("no LVS target %q", ctx.machine.Name)
@@ -114,12 +109,7 @@ func (a actuator) natEnsureAWS(
 	}
 
 	// Get the IP address for this machine.
-	var ipAddr string
-	for _, addr := range ctx.machine.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP {
-			ipAddr = addr.Address
-		}
-	}
+	ipAddr := ctx.msta.IPAddr
 	if ipAddr == "" {
 		return errors.Errorf("no IP address for %q", ctx.machine.Name)
 	}

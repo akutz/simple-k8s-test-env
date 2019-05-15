@@ -16,13 +16,6 @@ limitations under the License.
 
 package lvs
 
-import (
-	corev1 "k8s.io/api/core/v1"
-)
-
-// NodeIP is the node's IP address used to communicate with the LVS director.
-const NodeIP corev1.NodeAddressType = "LinuxVirtualSwitchIP"
-
 const getFreePortCmd = `read _l _u </proc/sys/net/ipv4/ip_local_port_range && ` +
 	`while true; do ` +
 	`_p=$(shuf -i $_l-$_u -n 1); ss -lpn | grep -q $_p || break; ` +

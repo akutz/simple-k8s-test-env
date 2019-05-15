@@ -19,9 +19,9 @@ package machine
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"path"
 	"regexp"
 	"strings"
@@ -54,9 +54,6 @@ func (a actuator) apiEnsure(ctx *reqctx) error {
 		case <-ctx.csta.ControlPlaneCanOwn:
 			defer status.End(ctx, false)
 			status.Start(ctx, "Configuring control plane 👀")
-			if err := a.nodeEnsureCloudProvider(ctx); err != nil {
-				return err
-			}
 			if err := a.apiEnsureInit(ctx); err != nil {
 				return err
 			}
@@ -98,12 +95,8 @@ func (a actuator) apiEnsureAccess(ctx *reqctx) error {
 
 		// Get the LVS target interface for this machine.
 		lvsTgt := config.ServiceEndpoint{
+			Addr: ctx.msta.IPAddr,
 			Port: 443,
-		}
-		for _, addr := range ctx.machine.Status.Addresses {
-			if addr.Type == lvs.NodeIP {
-				lvsTgt.Addr = addr.Address
-			}
 		}
 		if lvsTgt.Addr == "" {
 			return errors.Errorf("no LVS target %q", ctx.machine.Name)
@@ -124,49 +117,28 @@ func (a actuator) apiEnsureAccess(ctx *reqctx) error {
 }
 
 func (a actuator) apiEnsureInit(ctx *reqctx) error {
-	log.WithField("vm", ctx.machine.Name).Info("kubeadm-init")
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
+	log.WithField("vm", ctx.machine.Name).Debug("kubeadm-init")
 
-	cmd := &bytes.Buffer{}
-	fmt.Fprintf(
-		cmd,
-		"sudo sh -c '[ -e /etc/kubernetes/admin.conf ]' || "+
-			"sudo kubeadm init --apiserver-bind-port=443"+
-			" --kubernetes-version=%q",
-		ctx.machine.Spec.Versions.ControlPlane)
-
-	for _, e := range ctx.cluster.Status.APIEndpoints {
-		fmt.Fprintf(cmd, " --apiserver-cert-extra-sans=%q", e.Host)
-	}
-	if n := ctx.cluster.Spec.ClusterNetwork; true {
-		if v := n.Pods.CIDRBlocks; len(v) > 0 {
-			fmt.Fprintf(cmd, " --pod-network-cidr=%q", v[0])
-		}
-		if v := n.Services.CIDRBlocks; len(v) > 0 {
-			fmt.Fprintf(cmd, " --service-cidr=%q", v[0])
-		}
-		if v := n.ServiceDomain; v != "" {
-			fmt.Fprintf(cmd, " --service-dns-domain=%q", v)
-		}
-	}
-
-	stdout := &bytes.Buffer{}
-	fmt.Fprintln(stdout, cmd.String())
-	if err := ssh.Run(
-		ctx, sshClient, nil, stdout, nil, cmd.String()); err != nil {
-		return err
-	}
-
-	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
-	if configDir == "" {
+	if ssh.FileExists(ctx, ctx.ssh, "/etc/kubernetes/admin.conf") == nil {
+		log.WithField("vm", ctx.machine.Name).Info("kubeadm-init-idempotent")
 		return nil
 	}
 
-	kubeInitLog := path.Join(configDir, "kubeadm-init.log")
+	ctx.csta.ControlPlaneEndpoint = net.JoinHostPort(ctx.msta.IPAddr, "443")
+	log.WithField(
+		"ipAddr",
+		ctx.csta.ControlPlaneEndpoint).Info("control-plane-endpoint")
+
+	log.WithField("vm", ctx.machine.Name).Info("kubeadm-init-new")
+	cmd := "sudo kubeadm init --config " + kubeadmConfPath
+
+	stdout := &bytes.Buffer{}
+	fmt.Fprintln(stdout, cmd)
+	if err := ssh.Run(ctx, ctx.ssh, nil, stdout, nil, cmd); err != nil {
+		return err
+	}
+
+	kubeInitLog := path.Join(ctx.dir, "kubeadm-init.log")
 	ioutil.WriteFile(kubeInitLog, stdout.Bytes(), 0640)
 
 	re := regexp.MustCompile(`^\s*(kubeadm join.*)$`)
@@ -188,7 +160,7 @@ func (a actuator) apiEnsureInit(ctx *reqctx) error {
 		}
 	}
 
-	ctx.csta.KubeJoinCmd = joinBuf.String()
+	ctx.csta.KubeJoinCmd = joinBuf.String() + " --config " + kubeadmConfPath
 	close(ctx.csta.ControlPlaneOnline)
 
 	return nil
@@ -200,33 +172,17 @@ func (a actuator) apiEnsureNetwork(ctx *reqctx) error {
 	}
 	log.WithField("vm", ctx.machine.Name).Info("kube-apply-networking")
 
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
 	return ssh.Run(
-		ctx, sshClient,
+		ctx, ctx.ssh,
 		strings.NewReader(ctx.ccfg.Net),
 		nil, nil,
 		sudoKubectlApplyStdin)
 }
 
 func (a actuator) apiEnsureKubeConf(ctx *reqctx) error {
-	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
-	if configDir == "" {
-		return nil
-	}
-
 	log.WithField("vm", ctx.machine.Name).Info("kube-config-get")
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
-
 	stdout := &bytes.Buffer{}
-	if err := ssh.Run(ctx, sshClient, nil, stdout, nil,
+	if err := ssh.Run(ctx, ctx.ssh, nil, stdout, nil,
 		"sudo cat /etc/kubernetes/admin.conf"); err != nil {
 		return err
 	}
@@ -242,7 +198,7 @@ func (a actuator) apiEnsureKubeConf(ctx *reqctx) error {
 		ctx.cluster.Status.APIEndpoints[0].Host,
 		ctx.cluster.Status.APIEndpoints[0].Port))
 	kubeConfig := re.ReplaceAllLiteral(buf, newAPIServer)
-	kubeConfigPath := path.Join(configDir, "kube.conf")
+	kubeConfigPath := path.Join(ctx.dir, "kube.conf")
 	if err := ioutil.WriteFile(kubeConfigPath, kubeConfig, 0640); err != nil {
 		return errors.Wrapf(err, "error writing kubeConfig %q", kubeConfigPath)
 	}
@@ -251,16 +207,11 @@ func (a actuator) apiEnsureKubeConf(ctx *reqctx) error {
 }
 
 func (a actuator) apiEnsureCloudProvider(ctx *reqctx) error {
-	cloudProvider := ctx.cluster.Labels[config.CloudProviderLabelName]
 	switch ccm := ctx.ccfg.CloudProvider.Object.(type) {
 	case *vconfig.ExternalCloudProviderConfig:
-		if cloudProvider == "external" {
-			return a.apiEnsureExternalCloudProvider(ctx, ccm)
-		}
+		return a.apiEnsureExternalCloudProvider(ctx, ccm)
 	case *vconfig.InternalCloudProviderConfig:
-		if cloudProvider == "vsphere" {
-			return a.apiEnsureInternalCloudProvider(ctx, ccm)
-		}
+		return a.apiEnsureInternalCloudProvider(ctx, ccm)
 	}
 	return nil
 }
@@ -270,27 +221,8 @@ func (a actuator) apiEnsureExternalCloudProvider(
 	ccm *vconfig.ExternalCloudProviderConfig) error {
 
 	log.WithField("vm", ctx.machine.Name).Info("kube-apply-external-ccm")
-
-	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
-	if configDir == "" {
-		return nil
-	}
-
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
-
-	fmap := template.FuncMap{
-		"join": strings.Join,
-		"base64": func(plain string) string {
-			return base64.StdEncoding.EncodeToString([]byte(plain))
-		},
-	}
-
 	kubeApply := func(format, objectName string) error {
-		tpl, err := template.New("t").Funcs(fmap).Parse(format)
+		tpl, err := template.New("t").Funcs(tplFuncMap).Parse(format)
 		if err != nil {
 			return err
 		}
@@ -300,7 +232,7 @@ func (a actuator) apiEnsureExternalCloudProvider(
 		}
 
 		yamlFile := path.Join(
-			configDir,
+			ctx.dir,
 			fmt.Sprintf("ext-ccm-%s.yaml", objectName))
 		if err := ioutil.WriteFile(yamlFile, buf.Bytes(), 0640); err != nil {
 			return err
@@ -308,7 +240,7 @@ func (a actuator) apiEnsureExternalCloudProvider(
 
 		if err := ssh.Run(
 			ctx,
-			sshClient,
+			ctx.ssh,
 			buf,
 			nil,
 			nil,
@@ -356,27 +288,8 @@ func (a actuator) apiEnsureInternalCloudProvider(
 	ccm *vconfig.InternalCloudProviderConfig) error {
 
 	log.WithField("vm", ctx.machine.Name).Info("kube-apply-internal-ccm")
-
-	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
-	if configDir == "" {
-		return nil
-	}
-
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
-
-	fmap := template.FuncMap{
-		"join": strings.Join,
-		"base64": func(plain string) string {
-			return base64.StdEncoding.EncodeToString([]byte(plain))
-		},
-	}
-
 	kubeApply := func(format, objectName string) error {
-		tpl, err := template.New("t").Funcs(fmap).Parse(format)
+		tpl, err := template.New("t").Funcs(tplFuncMap).Parse(format)
 		if err != nil {
 			return err
 		}
@@ -386,7 +299,7 @@ func (a actuator) apiEnsureInternalCloudProvider(
 		}
 
 		yamlFile := path.Join(
-			configDir,
+			ctx.dir,
 			fmt.Sprintf("int-ccm-%s.yaml", objectName))
 		if err := ioutil.WriteFile(yamlFile, buf.Bytes(), 0640); err != nil {
 			return err
@@ -394,7 +307,7 @@ func (a actuator) apiEnsureInternalCloudProvider(
 
 		if err := ssh.Run(
 			ctx,
-			sshClient,
+			ctx.ssh,
 			buf,
 			nil,
 			nil,
@@ -410,6 +323,5 @@ func (a actuator) apiEnsureInternalCloudProvider(
 		return err
 	}
 
-	// Ensure the "cloud.conf" file is uploaded prior to the kubelet starting.
-	return a.nodeEnsureInternalCloudProvider(ctx, ccm)
+	return nil
 }

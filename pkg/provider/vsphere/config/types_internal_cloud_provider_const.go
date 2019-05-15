@@ -17,28 +17,30 @@ limitations under the License.
 package config
 
 const intCCMConfigFormat = `[Global]
-  datacenters        = "{{.Datacenter}}"
+datacenters        = "{{.Datacenter}}"
+insecure-flag      = "{{.Insecure}}"
+port               = "{{.ServerPort}}"
+secret-name        = "{{.SecretName}}"
+secret-namespace   = "{{.Namespace}}"
 
 [VirtualCenter "{{.ServerAddr}}"]
 
 [Workspace]
-  server             = "{{.ServerAddr}}"
-  port               = {{.ServerPort}}
-  insecure-flag      = {{.Insecure}}
-  datacenter         = "{{.Datacenter}}"
-  folder             = "{{.Folder}}"
-  default-datastore  = "{{.Datastore}}"
-  resourcepool-path  = "{{.ResourcePool}}"
+server             = "{{.ServerAddr}}"
+datacenter         = "{{.Datacenter}}"
+folder             = "{{.Folder}}"
+default-datastore  = "{{.Datastore}}"
+resourcepool-path  = "{{.ResourcePool}}"
 
 [Disk]
-  scsicontrollertype = {{.SCSIControllerType}}
+scsicontrollertype = {{.SCSIControllerType}}
 
 [Network]
-  public-network     = "{{.Network}}"{{if .Region}}{{if .Zone}}
+public-network     = "{{.Network}}"{{if .Region}}{{if .Zone}}
 
 [Labels]
-  region = "{{.Region}}"
-  zone =   "{{.Zone}}"{{end}}{{end}}
+region = "{{.Region}}"
+zone =   "{{.Zone}}"{{end}}{{end}}
 `
 
 const intCCMSecretsFormat = `apiVersion: v1

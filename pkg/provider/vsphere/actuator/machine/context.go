@@ -26,6 +26,7 @@ import (
 	capi "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 
 	"vmware.io/sk8/pkg/config"
+	"vmware.io/sk8/pkg/net/ssh"
 	vconfig "vmware.io/sk8/pkg/provider/vsphere/config"
 	vclient "vmware.io/sk8/pkg/provider/vsphere/govmomi/client"
 	vutil "vmware.io/sk8/pkg/provider/vsphere/util"
@@ -35,11 +36,13 @@ type reqctx struct {
 	context.Context
 	cluster *capi.Cluster
 	machine *capi.Machine
+	dir     string
 	ccfg    *vconfig.ClusterProviderConfig
 	mcfg    *vconfig.MachineProviderConfig
 	csta    *vconfig.ClusterStatus
 	msta    *vconfig.MachineStatus
 	role    config.MachineRole
+	ssh     *ssh.Client
 	vcli    *vclient.Client
 	vm      *object.VirtualMachine
 }
@@ -72,6 +75,7 @@ func newRequestContext(
 		ccfg:    vutil.GetClusterProviderConfig(cluster),
 		mcfg:    vutil.GetMachineProviderConfig(machine),
 		msta:    &vconfig.MachineStatus{},
+		dir:     cluster.Labels[config.ConfigDirLabelName],
 	}
 
 	if ps := cluster.Status.ProviderStatus; ps != nil {

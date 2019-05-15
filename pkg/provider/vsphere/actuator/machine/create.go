@@ -54,6 +54,10 @@ func (a actuator) create(
 	if err := a.sshEnsure(ctx); err != nil {
 		return err
 	}
+	defer ctx.ssh.Close()
+	if err := a.filesEnsure(ctx); err != nil {
+		return err
+	}
 	if err := a.apiEnsure(ctx); err != nil {
 		return err
 	}

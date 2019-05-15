@@ -14,23 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package kubeadm
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"vmware.io/sk8/pkg/config"
+	"crypto/rand"
+	"crypto/sha1"
+	"fmt"
 )
 
-// MachineStatus describes the status of a machine.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type MachineStatus struct {
-	// TypeMeta representing the type of the object and its API schema version.
-	metav1.TypeMeta `json:",inline"`
-
-	// SSH defines how to access the machine via SSH.
-	SSH *config.SSHEndpoint `json:"ssh"`
-
-	// IPAddr is the node's primary, internal IP address.
-	IPAddr string `json:"ipAddr,omitempty"`
+// NewBootstrapToken returns a new bootstrap token that adheres to the
+// regexp [a-z0-9]{6}\.[a-z0-9]{16}.
+func NewBootstrapToken() string {
+	buf := make([]byte, 256)
+	rand.Read(buf)
+	h := sha1.New()
+	h.Write(buf)
+	str := fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("%s.%s", str[len(str)-6:], str[:16])
 }

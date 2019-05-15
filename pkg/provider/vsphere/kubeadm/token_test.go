@@ -14,23 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package kubeadm_test
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"regexp"
+	"testing"
 
-	"vmware.io/sk8/pkg/config"
+	"vmware.io/sk8/pkg/provider/vsphere/kubeadm"
 )
 
-// MachineStatus describes the status of a machine.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type MachineStatus struct {
-	// TypeMeta representing the type of the object and its API schema version.
-	metav1.TypeMeta `json:",inline"`
-
-	// SSH defines how to access the machine via SSH.
-	SSH *config.SSHEndpoint `json:"ssh"`
-
-	// IPAddr is the node's primary, internal IP address.
-	IPAddr string `json:"ipAddr,omitempty"`
+func TestNewBootstrapToken(t *testing.T) {
+	token := kubeadm.NewBootstrapToken()
+	re := `[a-z0-9]{6}\.[a-z0-9]{16}`
+	ok, err := regexp.MatchString(re, token)
+	if err != nil {
+		t.Fatalf("token=%q does not match %q: %v", token, re, err)
+	}
+	if !ok {
+		t.Fatalf("token=%q does not match %q", token, re)
+	}
 }

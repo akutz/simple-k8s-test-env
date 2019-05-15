@@ -14,23 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package machine
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"vmware.io/sk8/pkg/config"
+	"encoding/base64"
+	"strings"
+	"text/template"
 )
 
-// MachineStatus describes the status of a machine.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type MachineStatus struct {
-	// TypeMeta representing the type of the object and its API schema version.
-	metav1.TypeMeta `json:",inline"`
-
-	// SSH defines how to access the machine via SSH.
-	SSH *config.SSHEndpoint `json:"ssh"`
-
-	// IPAddr is the node's primary, internal IP address.
-	IPAddr string `json:"ipAddr,omitempty"`
+var tplFuncMap = template.FuncMap{
+	"join": strings.Join,
+	"base64": func(plain string) string {
+		return base64.StdEncoding.EncodeToString([]byte(plain))
+	},
 }

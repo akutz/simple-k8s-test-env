@@ -42,6 +42,9 @@ func (a actuator) reconcileWithContext(
 	if err != nil {
 		return err
 	}
+	if err := a.ccmEnsure(ctx); err != nil {
+		return err
+	}
 	if err := a.ovaEnsure(ctx); err != nil {
 		return err
 	}

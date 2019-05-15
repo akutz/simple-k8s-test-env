@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"vmware.io/sk8/pkg/config"
-	"vmware.io/sk8/pkg/net/lvs"
 	vcloudinit "vmware.io/sk8/pkg/provider/vsphere/cloudinit"
 	vdisk "vmware.io/sk8/pkg/provider/vsphere/govmomi/disk"
 	vnet "vmware.io/sk8/pkg/provider/vsphere/govmomi/net"
@@ -207,11 +206,15 @@ func (a actuator) vmEnsureNetworkReady(ctx *reqctx) error {
 		}
 		for macAddr, dev := range devices {
 			for _, ipAddr := range dev {
+				if ctx.msta.IPAddr == "" {
+					ctx.msta.IPAddr = ipAddr
+				}
 				log.WithFields(log.Fields{
 					"vm":      ctx.machine.Name,
 					"device":  devName,
 					"macAddr": macAddr,
 					"ipAddr":  ipAddr,
+					"primary": ctx.msta.IPAddr == ipAddr,
 				}).Debug("has IP address")
 				ctx.machine.Status.Addresses = append(
 					ctx.machine.Status.Addresses,
@@ -228,7 +231,7 @@ func (a actuator) vmEnsureNetworkReady(ctx *reqctx) error {
 	var addrType corev1.NodeAddressType
 	switch ctx.ccfg.NAT.Object.(type) {
 	case *config.LinuxVirtualSwitchConfig:
-		addrType = lvs.NodeIP
+		addrType = corev1.NodeInternalIP
 	default:
 		addrType = corev1.NodeInternalIP
 	}

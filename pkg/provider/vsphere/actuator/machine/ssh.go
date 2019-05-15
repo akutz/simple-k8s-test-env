@@ -26,7 +26,6 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"vmware.io/sk8/pkg/config"
 	"vmware.io/sk8/pkg/net/ssh"
 )
 
@@ -50,7 +49,7 @@ func (a actuator) sshEnsureOnline(ctx *reqctx) error {
 				log.WithError(err).Debug("ssh not ready")
 				time.Sleep(sleep)
 			} else {
-				sshClient.Close()
+				ctx.ssh = sshClient
 				close(done)
 				return
 			}
@@ -70,14 +69,8 @@ func (a actuator) sshEnsureRemoteKey(ctx *reqctx) error {
 	keyPath := fmt.Sprintf("/home/%s/.ssh/id_rsa", ctx.ccfg.SSH.Username)
 	keyMode := os.FileMode(0400)
 
-	sshClient, err := ssh.NewClient(*ctx.msta.SSH, ctx.ccfg.SSH)
-	if err != nil {
-		return err
-	}
-	defer sshClient.Close()
-
 	if err := ssh.Upload(
-		ctx, sshClient,
+		ctx, ctx.ssh,
 		ctx.ccfg.SSH.PrivateKey, keyPath,
 		ctx.ccfg.SSH.Username, ctx.ccfg.SSH.Username,
 		keyMode); err != nil {
@@ -89,16 +82,11 @@ func (a actuator) sshEnsureRemoteKey(ctx *reqctx) error {
 }
 
 func (a actuator) sshEnsureLocalConf(ctx *reqctx) error {
-	configDir := ctx.cluster.Labels[config.ConfigDirLabelName]
-	if configDir == "" {
-		return nil
-	}
-
 	ctx.csta.SSHConfigMu.Lock()
 	defer ctx.csta.SSHConfigMu.Unlock()
 
-	sshConfPath := path.Join(configDir, "ssh.conf")
-	sshKeyPath := path.Join(configDir, "ssh.key")
+	sshConfPath := path.Join(ctx.dir, "ssh.conf")
+	sshKeyPath := path.Join(ctx.dir, "ssh.key")
 	f, err := os.OpenFile(
 		sshConfPath,
 		os.O_RDWR|os.O_APPEND,

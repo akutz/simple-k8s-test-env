@@ -45,6 +45,10 @@ type ClusterStatus struct {
 	// AWS is the status of the AWSLoadBalancer NAT provider
 	AWS *AWSLoadBalancerStatus `json:"aws,omitempty"`
 
+	// ControlPlaneEndpoint is the address of the host on which the control
+	// plane was initialized.
+	ControlPlaneEndpoint string `json:"controlPlaneEndpoint,omitempty"`
+
 	// ControlPlaneCanOwn is a channel used to signal that a machine is
 	// responsible for initializing the control plane.
 	ControlPlaneCanOwn chan struct{} `json:"-"`

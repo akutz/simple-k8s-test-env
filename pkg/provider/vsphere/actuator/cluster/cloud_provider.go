@@ -14,23 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package cluster
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"vmware.io/sk8/pkg/config"
+	vconfig "vmware.io/sk8/pkg/provider/vsphere/config"
 )
 
-// MachineStatus describes the status of a machine.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type MachineStatus struct {
-	// TypeMeta representing the type of the object and its API schema version.
-	metav1.TypeMeta `json:",inline"`
-
-	// SSH defines how to access the machine via SSH.
-	SSH *config.SSHEndpoint `json:"ssh"`
-
-	// IPAddr is the node's primary, internal IP address.
-	IPAddr string `json:"ipAddr,omitempty"`
+func (a actuator) ccmEnsure(ctx *reqctx) error {
+	switch ctx.ccfg.CloudProvider.Object.(type) {
+	case *vconfig.ExternalCloudProviderConfig:
+		ctx.cluster.Labels[config.CloudProviderLabelName] = "external"
+	case *vconfig.InternalCloudProviderConfig:
+		ctx.cluster.Labels[config.CloudProviderLabelName] = "vsphere"
+	}
+	return nil
 }
